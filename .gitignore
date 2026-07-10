@@ -5,5 +5,6 @@ node_modules/
 target/
 *.tsbuildinfo
 .jest_cache
-src/client/styles/tailwind.generated.css.playwright-mcp/
+src/client/styles/tailwind.generated.css
+.playwright-mcp/
 .impeccable/
