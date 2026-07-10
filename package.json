@@ -1,0 +1,40 @@
+{
+  "name": "weekend-change-console",
+  "version": "0.0.1",
+  "description": "",
+  "license": "UNLICENSED",
+  "imports": {
+    "#now:*": "./@types/servicenow/fluent/*/index.js"
+  },
+  "scripts": {
+    "css": "tailwindcss -i ./src/client/styles/theme.css -o ./src/client/styles/tailwind.generated.css --minify",
+    "css:watch": "tailwindcss -i ./src/client/styles/theme.css -o ./src/client/styles/tailwind.generated.css --watch",
+    "build": "npm run css && now-sdk build",
+    "deploy": "now-sdk install",
+    "transform": "now-sdk transform",
+    "types": "now-sdk dependencies",
+    "dev": "now-sdk run dev"
+  },
+  "devDependencies": {
+    "@servicenow/glide": "27.0.5",
+    "@servicenow/isomorphic-rollup": "^1.3.6",
+    "@servicenow/sdk": "4.8.1",
+    "@tailwindcss/cli": "4.3.2",
+    "@types/react": "19.x",
+    "@types/react-dom": "19.x",
+    "tailwindcss": "4.3.2",
+    "typescript": "5.5.4"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "1.1.19",
+    "@radix-ui/react-select": "2.3.3",
+    "@radix-ui/react-slot": "1.3.0",
+    "@radix-ui/react-tabs": "1.1.17",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.24.0",
+    "react": "19.x",
+    "react-dom": "19.x",
+    "tailwind-merge": "3.6.0"
+  }
+}

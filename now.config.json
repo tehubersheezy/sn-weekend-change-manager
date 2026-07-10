@@ -1,0 +1,6 @@
+{
+  "scope": "x_912401_weekend_c",
+  "scopeId": "8e47d06b6a1549988c8fb033da077605",
+  "name": "Weekend Change Console",
+  "tsconfigPath": "./src/server/tsconfig.json"
+}
