@@ -1,9 +1,47 @@
+import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { AmbStatus } from '../services/SnowAmb'
 import { cn } from '../lib/utils'
 import { PHASES, type ScreenKey } from '../utils/phases'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
+
+const CLOCK_ZONES = [
+  { label: 'HK', tz: 'Asia/Hong_Kong' },
+  { label: 'Zug', tz: 'Europe/Zurich' },
+  { label: 'NY', tz: 'America/New_York' },
+].map((z) => ({
+  ...z,
+  fmt: new Intl.DateTimeFormat('en-US', {
+    timeZone: z.tz,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }),
+}))
+
+/** Team clocks: Hong Kong, Zug, New York — ticks on the half-minute. */
+function WorldClocks() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <div className="hidden items-center gap-4 lg:flex">
+      {CLOCK_ZONES.map((z) => (
+        <span key={z.label} className="inline-flex items-baseline gap-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-soft">
+            {z.label}
+          </span>
+          <span className="text-[13px] font-medium tabular-nums text-body-text">
+            {z.fmt.format(now)}
+          </span>
+        </span>
+      ))}
+    </div>
+  )
+}
 
 /** Connection dot per DESIGN.md: accent-teal = "active connection" indicator. */
 function LiveIndicator({ status }: { status: AmbStatus }) {
@@ -78,6 +116,7 @@ export function TopNav({
         ))}
       </nav>
       <div className="flex items-center gap-3">
+        <WorldClocks />
         <LiveIndicator status={liveStatus} />
         <Badge variant="pill" className="hidden sm:inline-flex">
           {windowLabel}

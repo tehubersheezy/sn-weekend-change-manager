@@ -257,25 +257,26 @@ export default function App() {
           />
         </div>
         <StatTiles stats={stats} />
-        {!loading && !error && stateTabs.length > 0 && (
-          <Tabs value={effectiveFilter} onValueChange={setFilter}>
-            <TabsList className="flex-wrap">
-              <TabsTrigger value="all">All</TabsTrigger>
-              {stateTabs.map((t) => (
-                <TabsTrigger key={t.value} value={t.value}>
-                  {t.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        )}
       </header>
 
       {/* Below the header: phase list and detail panel side by side, equal width. */}
       <main className="grid min-h-0 flex-1 grid-cols-2">
         <section className="min-h-0 overflow-y-auto border-r border-border p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
+          {/* One toolbar row: everything that scopes this list lives here. */}
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            {!loading && !error && stateTabs.length > 0 && (
+              <Tabs value={effectiveFilter} onValueChange={setFilter}>
+                <TabsList className="flex-wrap">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  {stateTabs.map((t) => (
+                    <TabsTrigger key={t.value} value={t.value}>
+                      {t.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            )}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               <RefFilter
                 allLabel="All groups"
                 options={groupOptions}
@@ -288,8 +289,8 @@ export default function App() {
                 value={effAssignee}
                 onChange={setAssigneeFilter}
               />
+              <ViewToggle view={view} onChange={setView} />
             </div>
-            <ViewToggle view={view} onChange={setView} />
           </div>
           {loading ? (
             <LoadingSkeletons />
@@ -343,7 +344,7 @@ function RefFilter({
 }) {
   return (
     <Select value={selected} onValueChange={onChange}>
-      <SelectTrigger className="h-9 w-44 text-[13px]">
+      <SelectTrigger className="h-8 w-36 text-[13px]">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -376,14 +377,15 @@ function ViewToggle({
           key={key}
           type="button"
           aria-pressed={view === key}
+          aria-label={`${label} view`}
+          title={`${label} view`}
           onClick={() => onChange(key)}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-sans text-[13px] font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15',
+            'inline-flex items-center rounded-md p-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15',
             view === key ? 'bg-surface-card text-ink' : 'text-muted-foreground',
           )}
         >
-          <Icon className="size-3.5" />
-          {label}
+          <Icon className="size-4" />
         </button>
       ))}
     </div>
