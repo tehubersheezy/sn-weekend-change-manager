@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
 import type { AmbStatus } from '../services/SnowAmb'
 import { cn } from '../lib/utils'
 import { PHASES, type ScreenKey } from '../utils/phases'
-import { Badge } from './ui/badge'
-import { Button } from './ui/button'
 
 const CLOCK_ZONES = [
   { label: 'HK', tz: 'Asia/Hong_Kong' },
@@ -28,7 +25,7 @@ function WorldClocks() {
     return () => clearInterval(id)
   }, [])
   return (
-    <div className="hidden items-center gap-4 lg:flex">
+    <div data-diag="clocks" className="flex items-center gap-4 max-lg:hidden">
       {CLOCK_ZONES.map((z) => (
         <span key={z.label} className="inline-flex items-baseline gap-1.5">
           <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-soft">
@@ -47,7 +44,7 @@ function WorldClocks() {
 function LiveIndicator({ status }: { status: AmbStatus }) {
   const label = status === 'live' ? 'Live' : status === 'connecting' ? 'Connecting' : 'Offline'
   return (
-    <span className="hidden items-center gap-1.5 text-[13px] font-medium text-muted-soft md:inline-flex">
+    <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-soft max-md:hidden">
       <span
         className={cn(
           'size-2 rounded-full',
@@ -75,20 +72,16 @@ function SpikeMark({ className }: { className?: string }) {
 
 /**
  * top-nav — 64px cream bar, flat (no border, no shadow) per the elevation spec.
- * Spike mark + serif wordmark at left; weekend-window pill + Refresh at right.
+ * Spike mark + serif wordmark at left; world clocks + live indicator at right.
  */
 export function TopNav({
-  windowLabel,
   liveStatus,
   screen,
   onScreenChange,
-  onRefresh,
 }: {
-  windowLabel: string
   liveStatus: AmbStatus
   screen: ScreenKey
   onScreenChange: (screen: ScreenKey) => void
-  onRefresh: () => void
 }) {
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-background px-6">
@@ -118,13 +111,6 @@ export function TopNav({
       <div className="flex items-center gap-3">
         <WorldClocks />
         <LiveIndicator status={liveStatus} />
-        <Badge variant="pill" className="hidden sm:inline-flex">
-          {windowLabel}
-        </Badge>
-        <Button variant="secondary" size="sm" onClick={onRefresh}>
-          <RefreshCw />
-          Refresh
-        </Button>
       </div>
     </header>
   )

@@ -7,6 +7,13 @@
 // callback. Auth rides entirely on the session cookie sent with the WS
 // upgrade — the Bayeux messages themselves carry no tokens. The now-sdk dev
 // server proxies /amb with websocket support, so this works on localhost too.
+//
+// Keepalive follows the capture's Step 4 exactly: after the initial
+// /meta/connect (advice timeout:0, answered immediately), exactly one
+// long-held /meta/connect stays outstanding at all times — the server holds
+// it up to advice.timeout (~30s) before replying, and the reply is the cue to
+// issue the next one. The hold is NOT a timeout; leaving gaps with no
+// outstanding connect lets the server treat the session as idle.
 
 interface BayeuxMessage {
     id?: string
@@ -29,6 +36,9 @@ interface Pending {
     timer: ReturnType<typeof setTimeout>
 }
 
+const REPLY_TIMEOUT = 15000
+const SUBSCRIBE_RETRIES = 3 // mirrors the server's subscribeCommandsFlow {retries:3, retryDelay min 2000}
+
 export class SnowAmb {
     private ws: WebSocket | null = null
     private clientId: string | null = null
@@ -39,7 +49,6 @@ export class SnowAmb {
     private active = new Set<string>()
     private connected = false
     private destroyed = false
-    private keepaliveTimer: ReturnType<typeof setTimeout> | null = null
     private keepaliveTimeout = 30000
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null
     private reconnectAttempts = 0
@@ -48,16 +57,31 @@ export class SnowAmb {
     private readonly connectTimeout: number
     private readonly reconnectBaseDelay: number
     private readonly maxReconnectAttempts: number
+    private readonly debug: boolean
 
     onstatus: ((status: AmbStatus) => void) | null = null
     onerror: ((err: unknown) => void) | null = null
 
-    constructor(opts: { connectTimeout?: number; reconnectBaseDelay?: number; maxReconnectAttempts?: number } = {}) {
+    constructor(
+        opts: {
+            connectTimeout?: number
+            reconnectBaseDelay?: number
+            maxReconnectAttempts?: number
+            debug?: boolean
+            /** Override the same-origin /amb endpoint (local dev sidecar). */
+            wsUrl?: string
+        } = {},
+    ) {
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        this.wsUrl = `${proto}://${window.location.host}/amb`
+        this.wsUrl = opts.wsUrl ?? `${proto}://${window.location.host}/amb`
         this.connectTimeout = opts.connectTimeout ?? 10000
         this.reconnectBaseDelay = opts.reconnectBaseDelay ?? 2000
         this.maxReconnectAttempts = opts.maxReconnectAttempts ?? 10
+        this.debug = opts.debug ?? false
+    }
+
+    private log(...args: unknown[]): void {
+        if (this.debug) console.info('[AMB]', ...args)
     }
 
     // ---- record-watcher channel helpers --------------------------------
@@ -68,23 +92,43 @@ export class SnowAmb {
         return b64.replace(/==$/, '--').replace(/=$/, '-')
     }
 
+    /** Inverse of base64url — used to render readable channel names in logs. */
+    static base64urlDecode(encoded: string): string {
+        const b64 = encoded.replace(/--$/, '==').replace(/-$/, '=')
+        return decodeURIComponent(escape(atob(b64)))
+    }
+
     /** Record-watcher channel: /rw/<type>/<table>/<base64url(filter)>. */
     static recordChannel(table: string, filter: string, type = 'default'): string {
         return `/rw/${type}/${table}/${SnowAmb.base64url(filter)}`
     }
 
+    /** Human-readable channel name for logs: decodes /rw/ filter segments. */
+    private static describe(channel: string): string {
+        const m = channel.match(/^\/rw\/([^/]+)\/([^/]+)\/(.+)$/)
+        if (!m) return channel
+        try {
+            return `/rw/${m[1]}/${m[2]}/[${SnowAmb.base64urlDecode(m[3])}]`
+        } catch {
+            return channel
+        }
+    }
+
     // ---- lifecycle ------------------------------------------------------
 
     async connect(): Promise<void> {
-        if (this.destroyed) return
+        // A destroyed client may be revived: React StrictMode dev remounts
+        // destroy and immediately re-connect the same instance.
+        this.destroyed = false
         this.onstatus?.('connecting')
         try {
             await this.openSocket()
             await this.handshake()
-            await this.startKeepalive()
+            await this.initialConnect()
             this.connected = true
             this.reconnectAttempts = 0
             this.onstatus?.('live')
+            this.holdConnect()
             await this.flushSubscriptions()
         } catch (err) {
             this.onerror?.(err)
@@ -101,6 +145,8 @@ export class SnowAmb {
         this.callbacks.get(channel)!.add(cb)
         if (this.connected && !this.active.has(channel)) {
             void this.sendSubscribe(channel)
+        } else if (!this.connected) {
+            this.log(`subscribe queued (offline): ${SnowAmb.describe(channel)}`)
         }
     }
 
@@ -125,8 +171,8 @@ export class SnowAmb {
     destroy(): void {
         this.destroyed = true
         this.connected = false
-        if (this.keepaliveTimer) clearTimeout(this.keepaliveTimer)
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+        this.reconnectTimer = null
         if (this.ws && this.clientId) {
             void this.send({ channel: '/meta/disconnect', clientId: this.clientId }).catch(() => {
                 /* best-effort */
@@ -140,13 +186,15 @@ export class SnowAmb {
 
     private openSocket(): Promise<void> {
         return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-                this.closeSocket()
-                reject(new Error(`AMB connect timeout (${this.connectTimeout}ms)`))
-            }, this.connectTimeout)
-
+            this.log(`opening ${this.wsUrl}`)
             const ws = new WebSocket(this.wsUrl)
             this.ws = ws
+            const timer = setTimeout(() => {
+                // Only tear down if this attempt still owns the socket — a
+                // revived client may have opened a newer one meanwhile.
+                if (this.ws === ws) this.closeSocket()
+                reject(new Error(`AMB connect timeout (${this.connectTimeout}ms)`))
+            }, this.connectTimeout)
             ws.onopen = () => {
                 clearTimeout(timer)
                 resolve()
@@ -183,9 +231,11 @@ export class SnowAmb {
         if (!resp.successful) throw new Error(`AMB handshake failed: ${resp.error || 'unknown'}`)
         this.clientId = resp.clientId as string
         if (resp.advice?.timeout) this.keepaliveTimeout = resp.advice.timeout
+        this.log(`handshake ok clientId=${this.clientId} server advice`, resp.advice)
     }
 
-    private async startKeepalive(): Promise<void> {
+    /** First /meta/connect carries advice timeout:0 → the server replies immediately. */
+    private async initialConnect(): Promise<void> {
         const resp = await this.send({
             channel: '/meta/connect',
             connectionType: 'websocket',
@@ -193,34 +243,39 @@ export class SnowAmb {
             clientId: this.clientId!,
         })
         if (!resp.successful) throw new Error(`AMB connect failed: ${resp.error || 'unknown'}`)
-        this.scheduleKeepalive()
     }
 
-    private scheduleKeepalive(): void {
-        if (this.keepaliveTimer) clearTimeout(this.keepaliveTimer)
+    /**
+     * Keep exactly one long-held /meta/connect outstanding (capture Step 4).
+     * The server answers within advice.timeout (~30s); each reply immediately
+     * triggers the next hold. Reply timeout = hold window + 10s grace.
+     */
+    private holdConnect(): void {
         if (this.destroyed || !this.connected) return
-        const delay = Math.max(this.keepaliveTimeout - 5000, 5000)
-        this.keepaliveTimer = setTimeout(async () => {
-            if (!this.connected || this.destroyed) return
-            try {
-                const resp = await this.send({
-                    channel: '/meta/connect',
-                    connectionType: 'websocket',
-                    clientId: this.clientId!,
-                })
-                // '402::Unknown client' + advice.reconnect='handshake' → session
-                // recycled server-side; tear down and re-handshake.
-                if (!resp.successful && resp.advice?.reconnect === 'handshake') {
+        void this.send(
+            { channel: '/meta/connect', connectionType: 'websocket', clientId: this.clientId! },
+            this.keepaliveTimeout + 10000,
+        )
+            .then((resp) => {
+                if (this.destroyed || !this.connected) return
+                if (!resp.successful) {
+                    // '402::Unknown client' + advice.reconnect='handshake' →
+                    // session recycled server-side; tear down and re-handshake.
+                    this.log(`held connect refused (${resp.error || 'unknown'}) — reconnecting`)
                     this.closeSocket()
                     this.handleClose()
                     return
                 }
-                this.scheduleKeepalive()
-            } catch (err) {
+                if (resp.advice?.timeout) this.keepaliveTimeout = resp.advice.timeout
+                this.holdConnect()
+            })
+            .catch((err) => {
+                if (this.destroyed || !this.connected) return
+                // No reply within hold window + grace: the socket is a zombie.
                 this.onerror?.(err)
-                // send() rejection means the socket is gone; onclose handles reconnect.
-            }
-        }, delay)
+                this.closeSocket()
+                this.handleClose()
+            })
     }
 
     /** (Re)subscribe every locally registered channel the server doesn't know. */
@@ -230,19 +285,36 @@ export class SnowAmb {
         }
     }
 
-    private async sendSubscribe(channel: string): Promise<void> {
+    private async sendSubscribe(channel: string, attempt = 0): Promise<void> {
         try {
             const resp = await this.send({ channel: '/meta/subscribe', subscription: channel, clientId: this.clientId! })
-            if (resp.successful) this.active.add(channel)
-            else this.onerror?.(new Error(`Subscribe failed for ${channel}: ${resp.error || 'unknown'}`))
+            if (resp.successful) {
+                this.active.add(channel)
+            } else {
+                // The server answered no — retrying the same request won't help.
+                this.onerror?.(new Error(`Subscribe refused for ${SnowAmb.describe(channel)}: ${resp.error || 'unknown'}`))
+            }
         } catch (err) {
-            this.onerror?.(err)
+            // Timeout or socket drop mid-request. Retry with the server's own
+            // subscribeCommandsFlow backoff (2s doubling), as long as someone
+            // still wants the channel and nothing else re-subscribed it.
+            if (!this.destroyed && this.connected && this.callbacks.has(channel) && attempt < SUBSCRIBE_RETRIES) {
+                const delay = 2000 * 2 ** attempt
+                this.log(`subscribe retry ${attempt + 1}/${SUBSCRIBE_RETRIES} in ${delay}ms: ${SnowAmb.describe(channel)}`)
+                setTimeout(() => {
+                    if (!this.destroyed && this.connected && this.callbacks.has(channel) && !this.active.has(channel)) {
+                        void this.sendSubscribe(channel, attempt + 1)
+                    }
+                }, delay)
+            } else {
+                this.onerror?.(err)
+            }
         }
     }
 
     // ---- send / receive -------------------------------------------------
 
-    private send(msg: Partial<BayeuxMessage> & { channel: string }): Promise<BayeuxMessage> {
+    private send(msg: Partial<BayeuxMessage> & { channel: string }, replyTimeout = REPLY_TIMEOUT): Promise<BayeuxMessage> {
         return new Promise((resolve, reject) => {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
                 reject(new Error('AMB socket not open'))
@@ -250,11 +322,25 @@ export class SnowAmb {
             }
             const id = String(++this.msgId)
             ;(msg as BayeuxMessage).id = id
+            const started = Date.now()
+            const label = msg.subscription ? `${msg.channel} ${SnowAmb.describe(msg.subscription)}` : msg.channel
+            this.log(`→ id=${id} ${label}`)
             const timer = setTimeout(() => {
                 this.pending.delete(id)
+                this.log(`✗ id=${id} ${label} no reply after ${replyTimeout}ms`)
                 reject(new Error(`AMB timeout waiting for ${msg.channel} (id ${id})`))
-            }, 15000)
-            this.pending.set(id, { resolve, reject, timer })
+            }, replyTimeout)
+            this.pending.set(id, {
+                resolve: (reply) => {
+                    this.log(
+                        `← id=${id} ${label} ok=${reply.successful} (${Date.now() - started}ms)` +
+                            (reply.error ? ` error=${reply.error}` : ''),
+                    )
+                    resolve(reply)
+                },
+                reject,
+                timer,
+            })
             this.ws.send(JSON.stringify([msg]))
         })
     }
@@ -276,8 +362,23 @@ export class SnowAmb {
                 p.resolve(msg)
                 continue
             }
+            // Server-initiated rehandshake advice (e.g. session recycled while
+            // no held connect was pending, or a reply that outlived its timer).
+            if (msg.channel === '/meta/connect' && msg.advice?.reconnect === 'handshake') {
+                this.log('server advised rehandshake — reconnecting')
+                this.closeSocket()
+                this.handleClose()
+                continue
+            }
+            if (msg.channel?.startsWith('/meta/')) {
+                // A reply we stopped waiting for, or other unsolicited meta
+                // traffic — surface it, this is exactly what diagnoses timeouts.
+                this.log('← unmatched meta frame', msg)
+                continue
+            }
             // Data frames dispatch to channel subscribers.
-            if (msg.channel && !msg.channel.startsWith('/meta/')) {
+            if (msg.channel) {
+                this.log(`← data ${SnowAmb.describe(msg.channel)}`, msg.data)
                 const subs = this.callbacks.get(msg.channel)
                 if (subs)
                     for (const cb of subs) {
@@ -295,7 +396,6 @@ export class SnowAmb {
         const wasConnected = this.connected
         this.connected = false
         this.active.clear()
-        if (this.keepaliveTimer) clearTimeout(this.keepaliveTimer)
         for (const [, p] of this.pending) {
             clearTimeout(p.timer)
             p.reject(new Error('AMB socket closed'))
@@ -312,6 +412,7 @@ export class SnowAmb {
         }
         const delay = Math.min(this.reconnectBaseDelay * 2 ** this.reconnectAttempts, 60000)
         this.reconnectAttempts += 1
+        this.log(`reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
         this.onstatus?.('connecting')
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null

@@ -11,7 +11,15 @@
 /* Design tokens (Claude / Anthropic editorial system — see DESIGN.md)         */
 /* shadcn-convention CSS variables mapped from the DESIGN.md palette.          */
 /* -------------------------------------------------------------------------- */
-:root {
+/*
+ * Tokens are defined on BOTH :root and #root. The :root copy keeps <body>
+ * (an ancestor of #root) styled; the #root copy (id specificity) wins for the
+ * whole app subtree, so ServiceNow's Polaris theme observer — which re-appends
+ * its own :root theme <link> after our styles load — can't reclaim these vars
+ * inside the console. See CLAUDE.md "CSS overwritten in dev" investigation.
+ */
+:root,
+#root {
   /* shadcn semantic tokens */
   --background: #faf9f5;
   --foreground: #141413;

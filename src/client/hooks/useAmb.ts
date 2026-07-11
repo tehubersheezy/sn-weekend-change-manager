@@ -8,9 +8,22 @@ import { SnowAmb, type AmbStatus } from '../services/SnowAmb'
 export function useAmbClient(): { amb: SnowAmb; status: AmbStatus } {
     const [status, setStatus] = useState<AmbStatus>('connecting')
     const ref = useRef<SnowAmb | null>(null)
-    if (!ref.current) ref.current = new SnowAmb()
+    // Verbose Bayeux tracing, on by default while the AMB layer beds in.
+    // Silence from the deployed console with: localStorage['wcm.ambDebug'] = '0'
+    // On localhost the dev server's /amb proxy can't authenticate the WS
+    // upgrade, so now.dev.mjs runs a session-cookie sidecar on :3001.
+    if (!ref.current) {
+        const local = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+        ref.current = new SnowAmb({
+            debug: localStorage.getItem('wcm.ambDebug') !== '0',
+            wsUrl: local ? `ws://${window.location.hostname}:3001/amb` : undefined,
+        })
+    }
 
     useEffect(() => {
+        // connect() revives a destroyed client, so the StrictMode dev cycle
+        // (mount → destroy → remount) reconnects the same instance and keeps
+        // every child's queued subscription.
         const client = ref.current!
         client.onstatus = setStatus
         client.onerror = (err) => console.warn('[AMB]', err)

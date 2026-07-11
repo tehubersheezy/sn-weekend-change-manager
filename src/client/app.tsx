@@ -31,6 +31,7 @@ import { ExecuteList } from './components/ExecuteList'
 import { ReviewList } from './components/ReviewList'
 import { TimelineView } from './components/TimelineView'
 import { ChangeDetailView } from './components/ChangeDetailView'
+import { runDiagnostics } from './utils/diag'
 
 const APP_TITLE = 'Weekend Change Console'
 const CONFIG_KEY = 'wcm.windowConfig'
@@ -139,6 +140,15 @@ export default function App() {
     document.title = titleFor(selectedId ? changeNumber : undefined)
   }, [selectedId, changeNumber])
 
+  // TEMP diagnostics: dump layout/theme state so we can find why the world
+  // clocks vanish on the deployed page. Fires on mount and again after the
+  // Polaris theme observer has had time to re-append its stylesheet.
+  useEffect(() => {
+    runDiagnostics('mount')
+    const t = setTimeout(() => runDiagnostics('after-2s'), 2000)
+    return () => clearTimeout(t)
+  }, [])
+
   const selectScreen = useCallback(
     (next: ScreenKey) => {
       setFilter('all') // state tabs are phase-scoped; reset on screen switch
@@ -232,16 +242,10 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <TopNav
-        windowLabel={weekendWindow.label}
-        liveStatus={ambStatus}
-        screen={screen}
-        onScreenChange={selectScreen}
-        onRefresh={refresh}
-      />
+      <TopNav liveStatus={ambStatus} screen={screen} onScreenChange={selectScreen} />
 
       {/* Full-width header: phase headline, window controls, stats, state filter. */}
-      <header className="flex flex-col gap-6 border-b border-border px-8 pb-6 pt-4">
+      <header data-diag="content-header" className="flex flex-col gap-6 border-b border-border px-8 pb-6 pt-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-[36px] leading-[1.15] tracking-[-0.5px] text-ink">
@@ -260,7 +264,7 @@ export default function App() {
       </header>
 
       {/* Below the header: phase list and detail panel side by side, equal width. */}
-      <main className="grid min-h-0 flex-1 grid-cols-2">
+      <main data-diag="main" className="grid min-h-0 flex-1 grid-cols-2">
         <section className="min-h-0 overflow-y-auto border-r border-border p-6">
           {/* One toolbar row: everything that scopes this list lives here. */}
           <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">

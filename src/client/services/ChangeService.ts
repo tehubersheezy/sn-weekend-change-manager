@@ -52,6 +52,21 @@ export function weekendChangeQuery(window: WeekendWindow): string {
 }
 
 /**
+ * Encoded query for change_task rows belonging to the weekend. A task's OWN
+ * planned_start_date/planned_end_date are frequently empty, so we can't window
+ * on them — a task belongs to the weekend iff its parent change_request does.
+ * Dot-walk through the change_request reference and apply the exact parent
+ * predicate from weekendChangeQuery. One call, no fan-out over parent sys_ids.
+ */
+export function weekendTaskQuery(window: WeekendWindow): string {
+  return (
+    `change_request.start_date<=${window.endUtc}` +
+    `^change_request.end_date>=${window.startUtc}` +
+    `^change_request.state!=4^change_request.state!=-5`
+  )
+}
+
+/**
  * Reads change_request records overlapping the weekend window plus their
  * change_task children. All calls go through the Table API with an X-UserToken
  * header and sysparm_display_value=all (fields arrive as {value, display_value}).
@@ -100,12 +115,11 @@ export class ChangeService {
     return this.query<TaskRecord>('change_task', params)
   }
 
-  /** All change_task rows for a batch of changes — one call, for progress counts. */
-  async listAllWeekendTasks(changeSysIds: string[]): Promise<TaskRecord[]> {
-    if (changeSysIds.length === 0) return []
+  /** All change_task rows whose planned window overlaps the weekend — one call. */
+  async listWeekendTasks(window: WeekendWindow): Promise<TaskRecord[]> {
     const params = new URLSearchParams({
       sysparm_fields: TASK_FIELDS,
-      sysparm_query: `change_requestIN${changeSysIds.join(',')}`,
+      sysparm_query: `${weekendTaskQuery(window)}^ORDERBYplanned_start_date`,
     })
     return this.query<TaskRecord>('change_task', params)
   }
