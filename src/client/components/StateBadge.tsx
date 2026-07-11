@@ -19,9 +19,13 @@ const CHANGE_STATE_VARIANT: Record<string, Variant> = {
   '4': 'outline', // Canceled
 }
 
-export function StateBadge({ state }: { state: SnValue }) {
+export function StateBadge({ state, className }: { state: SnValue; className?: string }) {
   const variant = CHANGE_STATE_VARIANT[value(state)] ?? 'pill'
-  return <Badge variant={variant}>{display(state) || 'Unknown'}</Badge>
+  return (
+    <Badge variant={variant} className={className}>
+      {display(state) || 'Unknown'}
+    </Badge>
+  )
 }
 
 /**
@@ -29,14 +33,18 @@ export function StateBadge({ state }: { state: SnValue }) {
  * across the standard task state set (Open, Work in Progress, Closed Complete /
  * Incomplete / Skipped).
  */
-export function TaskStateBadge({ state }: { state: SnValue }) {
+export function TaskStateBadge({ state, className }: { state: SnValue; className?: string }) {
   const label = display(state) || 'Unknown'
   const lower = label.toLowerCase()
   let variant: Variant = 'pill'
   if (lower.includes('skip')) variant = 'outline'
   else if (lower.includes('incomplete')) variant = 'error'
-  else if (lower.includes('complete')) variant = 'success'
+  else if (lower.includes('complete') || lower === 'closed') variant = 'success'
   else if (lower.includes('progress')) variant = 'teal'
   else if (lower.includes('open') || lower.includes('pending')) variant = 'amber'
-  return <Badge variant={variant}>{label}</Badge>
+  return (
+    <Badge variant={variant} className={className}>
+      {label}
+    </Badge>
+  )
 }

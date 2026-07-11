@@ -114,6 +114,18 @@ export function formatDateTime(date: Date | null): string {
   return date ? dateTimeFmt.format(date) : '—'
 }
 
+const timeFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: ET_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+})
+
+/** e.g. '9:14 PM' in ET — for rows already under a day-group header. */
+export function formatTime(date: Date | null): string {
+  return date ? timeFmt.format(date) : '—'
+}
+
 const dayFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: ET_ZONE,
   weekday: 'long',

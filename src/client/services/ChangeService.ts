@@ -1,5 +1,6 @@
-import type { ChangeRecord, TaskRecord } from '../types'
+import type { AffectedCiRecord, ChangeRecord, TaskRecord } from '../types'
 import type { WeekendWindow } from '../utils/weekendWindow'
+import { tableQuery } from './tableApi'
 
 const CHANGE_FIELDS = [
   'sys_id',
@@ -35,6 +36,14 @@ const TASK_FIELDS = [
   'correlation_display',
 ].join(',')
 
+const CI_FIELDS = [
+  'sys_id',
+  'ci_item',
+  // Dot-walked CI attributes come back under these exact dotted keys.
+  'ci_item.sys_class_name',
+  'ci_item.operational_status',
+].join(',')
+
 /**
  * Encoded query for change_request rows overlapping the window. Shared by the
  * Table API list call and the AMB record-watcher channel so both see the same
@@ -68,25 +77,12 @@ export function weekendTaskQuery(window: WeekendWindow): string {
 
 /**
  * Reads change_request records overlapping the weekend window plus their
- * change_task children. All calls go through the Table API with an X-UserToken
- * header and sysparm_display_value=all (fields arrive as {value, display_value}).
+ * change_task children. All calls go through the shared tableQuery helper
+ * (X-UserToken + sysparm_display_value=all).
  */
 export class ChangeService {
-  private async query<T>(table: string, params: URLSearchParams): Promise<T[]> {
-    params.set('sysparm_display_value', 'all')
-    const response = await fetch(`/api/now/table/${table}?${params.toString()}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'X-UserToken': window.g_ck,
-      },
-    })
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error?.message || `HTTP error ${response.status}`)
-    }
-    const { result } = await response.json()
-    return (result as T[]) || []
+  private query<T>(table: string, params: URLSearchParams): Promise<T[]> {
+    return tableQuery<T>(table, params)
   }
 
   /** change_request rows overlapping the window, ordered by planned start. */
@@ -113,6 +109,18 @@ export class ChangeService {
       sysparm_query: `change_request=${changeSysId}^ORDERBYplanned_start_date`,
     })
     return this.query<TaskRecord>('change_task', params)
+  }
+
+  /**
+   * Affected CIs for one change. task_ci.task references the change_request
+   * row itself (not its tasks), so a single equality query covers the change.
+   */
+  async listAffectedCis(changeSysId: string): Promise<AffectedCiRecord[]> {
+    const params = new URLSearchParams({
+      sysparm_fields: CI_FIELDS,
+      sysparm_query: `task=${changeSysId}^ORDERBYci_item`,
+    })
+    return this.query<AffectedCiRecord>('task_ci', params)
   }
 
   /** All change_task rows whose planned window overlaps the weekend — one call. */

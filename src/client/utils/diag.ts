@@ -61,9 +61,48 @@ export function runDiagnostics(tag = 'mount') {
             }
         }
 
+        // Which font family ACTUALLY renders a live element? Measure the element,
+        // then re-measure its text with each family of its stack in isolation —
+        // the family whose solo width matches the live width is the renderer.
+        // (Missing glyphs/weights fall to a different font and change the width.)
+        const whichFontRenders = (sample: Element | null): string => {
+            if (!sample) return '(sample not found)'
+            const c = cs(sample)
+            const probe = document.createElement('span')
+            probe.textContent = sample.textContent || '9:39 AM'
+            probe.style.cssText =
+                `position:absolute;visibility:hidden;white-space:pre;` +
+                `font-size:${c.fontSize};font-weight:${c.fontWeight};` +
+                `letter-spacing:${c.letterSpacing};text-transform:${c.textTransform};` +
+                `font-variant-numeric:${c.fontVariantNumeric};`
+            document.body.appendChild(probe)
+            const target = sample.getBoundingClientRect().width
+            let hit = `(no stack family matches ${Math.round(target)}px)`
+            for (const raw of c.fontFamily.split(',')) {
+                const fam = raw.trim().replace(/^["']|["']$/g, '')
+                probe.style.fontFamily = `"${fam}"`
+                if (Math.abs(probe.getBoundingClientRect().width - target) < 0.6) {
+                    hit = fam
+                    break
+                }
+            }
+            probe.remove()
+            return hit
+        }
+        const fontAvail = ['StyreneB', 'Inter', 'Tiempos Headline', 'Cormorant Garamond', 'JetBrains Mono']
+            .map((f) => `${f}=${document.fonts.check(`16px "${f}"`) ? 'YES' : 'no'}`)
+            .join('  ')
+        const clockLabel = document.querySelector('[data-diag="clocks"] > span > span:nth-child(1)')
+        const clockTime = document.querySelector('[data-diag="clocks"] > span > span:nth-child(2)')
+
         const lines = [
             `===== WCM-DIAG (${tag}) =====`,
             `innerWidth=${window.innerWidth} htmlFont=${px(html, 'font-size')} bodyFont=${px(body, 'font-size')}`,
+            `-- fonts --`,
+            `installed locally   : ${fontAvail}`,
+            `clock LABEL renders : ${whichFontRenders(clockLabel)}`,
+            `clock TIME renders  : ${whichFontRenders(clockTime)}`,
+            `h1 headline renders : ${whichFontRenders(document.querySelector('h1'))}`,
             `-- overflow --`,
             ...overflow,
             `-- element boxes --`,

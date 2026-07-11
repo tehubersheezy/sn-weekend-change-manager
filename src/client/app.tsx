@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChangeService } from './services/ChangeService'
+import { ActivityService } from './services/ActivityService'
 import { useAmbClient } from './hooks/useAmb'
 import { useWeekendChanges } from './hooks/useWeekendChanges'
+import { useActivityFeed } from './hooks/useActivityFeed'
 import {
   DEFAULT_WINDOW_CONFIG,
   getWeekendWindow,
@@ -31,6 +33,7 @@ import { ExecuteList } from './components/ExecuteList'
 import { ReviewList } from './components/ReviewList'
 import { TimelineView } from './components/TimelineView'
 import { ChangeDetailView } from './components/ChangeDetailView'
+import { ActivityFeed } from './components/ActivityFeed'
 import { runDiagnostics } from './utils/diag'
 
 const APP_TITLE = 'Weekend Change Console'
@@ -118,6 +121,12 @@ export default function App() {
   const { changes, tasks, loading, error } = useWeekendChanges(service, amb, weekendWindow, refreshKey)
   const tasksByChange = useMemo(() => groupTasksByChange(tasks), [tasks])
 
+  // The activity feed lives here (not inside its component) so its data
+  // survives detail navigation — coming back from a change is instant. Live
+  // refresh piggybacks on the arrays' identity, which the AMB watchers renew.
+  const activityService = useMemo(() => new ActivityService(), [])
+  const feed = useActivityFeed(activityService, changes, tasks, !loading && !error)
+
   const updateWindowConfig = useCallback((next: WindowConfig) => {
     setWindowConfig(next)
     try {
@@ -166,6 +175,12 @@ export default function App() {
     },
     [screen],
   )
+
+  /** Back to the pane's resting view: the weekend activity feed. */
+  const clearSelection = useCallback(() => {
+    pushUrl(screen, null, titleFor())
+    setNav((prev) => ({ ...prev, selectedId: null }))
+  }, [screen])
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
@@ -325,9 +340,17 @@ export default function App() {
               sysId={selectedId}
               refreshKey={refreshKey}
               onLoaded={setChangeNumber}
+              onBack={clearSelection}
             />
           ) : (
-            <EmptyDetailPane />
+            <ActivityFeed
+              events={feed.events}
+              loading={feed.loading}
+              error={feed.error}
+              changes={changes}
+              tasks={tasks}
+              onOpen={selectChange}
+            />
           )}
         </section>
       </main>
@@ -392,19 +415,6 @@ function ViewToggle({
           <Icon className="size-4" />
         </button>
       ))}
-    </div>
-  )
-}
-
-function EmptyDetailPane() {
-  return (
-    <div className="flex h-full items-center justify-center p-8">
-      <div className="max-w-sm text-center">
-        <h2 className="text-[28px] leading-[1.2] tracking-[-0.3px] text-ink">Select a change</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Pick a change from the list to see its plans, tasks, and affected CIs here.
-        </p>
-      </div>
     </div>
   )
 }

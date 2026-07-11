@@ -23,6 +23,19 @@ export interface ChangeRecord {
   close_code: SnField
 }
 
+/**
+ * A task_ci (affected CI) row. task_ci.task holds the change_request sys_id
+ * directly. CI attributes are dot-walked through ci_item and arrive under
+ * dotted keys, exactly as sent in sysparm_fields.
+ */
+export interface AffectedCiRecord {
+  sys_id: SnField
+  /** Reference to cmdb_ci — display_value is the CI name. */
+  ci_item: SnField
+  'ci_item.sys_class_name': SnField
+  'ci_item.operational_status': SnField
+}
+
 /** A change_task row. */
 export interface TaskRecord {
   sys_id: SnField

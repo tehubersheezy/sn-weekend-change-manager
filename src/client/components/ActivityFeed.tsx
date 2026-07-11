@@ -1,0 +1,227 @@
+import { useMemo } from 'react'
+import { ArrowRight, CheckCircle2, CircleDot, MessageSquare, StickyNote } from 'lucide-react'
+import type { FeedEvent } from '../services/ActivityService'
+import { FEED_LIMIT } from '../services/ActivityService'
+import type { ChangeRecord, TaskRecord } from '../types'
+import { display, value } from '../utils/fields'
+import { formatDay, formatTime } from '../utils/datetime'
+import { asStateField } from '../utils/stateLabels'
+import { cn } from '../lib/utils'
+import { Badge } from './ui/badge'
+import { Skeleton } from './ui/skeleton'
+import { GroupLabel } from './ChangeList'
+import { StateBadge, TaskStateBadge } from './StateBadge'
+
+/** A feed event joined to the loaded change (and task) it belongs to. */
+interface FeedItem {
+  event: FeedEvent
+  change: ChangeRecord
+  task?: TaskRecord
+}
+
+const KIND_ICON = {
+  comment: MessageSquare,
+  work_note: StickyNote,
+  state: CircleDot,
+  approval: CheckCircle2,
+} as const
+
+const APPROVAL_BADGE: Record<string, { label: string; variant: 'success' | 'error' | 'amber' | 'outline' }> = {
+  approved: { label: 'Approved', variant: 'success' },
+  rejected: { label: 'Rejected', variant: 'error' },
+  requested: { label: 'Approval requested', variant: 'amber' },
+  'not requested': { label: 'Approval reset', variant: 'outline' },
+}
+
+/** Feed badges sit inline in 14px text — one step smaller than list badges. */
+const SMALL_BADGE = 'px-2 py-0.5 text-xs'
+
+/**
+ * The right pane's resting view: everything moving across the weekend window —
+ * comments, work notes, state transitions, approvals — newest first, grouped
+ * by ET day. Rows click through to the change; live updates arrive silently
+ * via useActivityFeed.
+ */
+export function ActivityFeed({
+  events,
+  loading,
+  error,
+  changes,
+  tasks,
+  onOpen,
+}: {
+  events: FeedEvent[]
+  loading: boolean
+  error: string | null
+  changes: ChangeRecord[]
+  tasks: TaskRecord[]
+  onOpen: (sysId: string) => void
+}) {
+  // Join events to loaded records; events on records that left the window
+  // (or task events whose parent isn't loaded) drop out here.
+  const items = useMemo<FeedItem[]>(() => {
+    const changesById = new Map(changes.map((c) => [value(c.sys_id), c]))
+    const tasksById = new Map(tasks.map((t) => [value(t.sys_id), t]))
+    const joined: FeedItem[] = []
+    for (const event of events) {
+      if (event.table === 'change_task') {
+        const task = tasksById.get(event.targetSysId)
+        const change = task && changesById.get(value(task.change_request))
+        if (task && change) joined.push({ event, change, task })
+      } else {
+        const change = changesById.get(event.targetSysId)
+        if (change) joined.push({ event, change })
+      }
+    }
+    return joined
+  }, [events, changes, tasks])
+
+  const days = useMemo(() => {
+    const groups: { day: string; items: FeedItem[] }[] = []
+    for (const item of items) {
+      const day = formatDay(item.event.when)
+      const last = groups[groups.length - 1]
+      if (last && last.day === day) last.items.push(item)
+      else groups.push({ day, items: [item] })
+    }
+    return groups
+  }, [items])
+
+  return (
+    <div className="flex flex-col gap-8 px-8 py-8">
+      <header>
+        <h1 className="text-[28px] leading-[1.2] tracking-[-0.3px] text-ink">Weekend activity</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Comments, work notes, and state changes across every change in this window, as they
+          happen. Select an update to open its change.
+        </p>
+      </header>
+
+      {loading ? (
+        <div className="flex flex-col gap-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-border py-16 text-center">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg border border-border px-8 py-16 text-center">
+          <h2 className="text-[22px] leading-[1.25] tracking-[-0.2px] text-ink">All quiet</h2>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+            Nothing has moved in this window yet. Comments, work notes, and state changes will
+            appear here the moment they land.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {days.map((group) => (
+            <section key={group.day} className="flex flex-col gap-1">
+              <GroupLabel>{group.day}</GroupLabel>
+              <ol className="divide-y divide-hairline-soft">
+                {group.items.map((item) => (
+                  <li key={item.event.id}>
+                    <FeedRow item={item} onOpen={onOpen} />
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
+          {events.length >= FEED_LIMIT && (
+            <p className="text-[13px] text-muted-soft">
+              Showing the latest {FEED_LIMIT} updates.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FeedRow({ item, onOpen }: { item: FeedItem; onOpen: (sysId: string) => void }) {
+  const { event, change, task } = item
+  const Icon = KIND_ICON[event.kind]
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(value(change.sys_id))}
+      className="flex w-full items-start gap-3 py-4 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15 active:bg-surface-soft"
+    >
+      <Icon className="mt-0.5 size-4 shrink-0 text-muted-soft" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-sans text-[13px] text-muted-foreground">
+          {display(change.number)}
+          {task && ` · ${display(task.number)}`}
+          <span className="text-muted-soft"> · </span>
+          <span className="text-body-text">
+            {display(change.short_description) || 'Untitled change'}
+          </span>
+        </div>
+        <EventLine event={event} task={task} />
+        {(event.kind === 'comment' || event.kind === 'work_note') && event.text && (
+          <p
+            className={cn(
+              'mt-2 line-clamp-4 whitespace-pre-wrap border-l-2 pl-3 text-sm leading-relaxed text-body-text',
+              event.kind === 'work_note' ? 'border-accent-amber' : 'border-border',
+            )}
+          >
+            {event.text}
+          </p>
+        )}
+      </div>
+      <span className="shrink-0 font-sans text-[13px] text-muted-soft">
+        {formatTime(event.when)}
+      </span>
+    </button>
+  )
+}
+
+/** The one-line description of what happened: who did what. */
+function EventLine({ event, task }: { event: FeedEvent; task?: TaskRecord }) {
+  const who = <span className="font-medium text-ink">{event.who}</span>
+
+  if (event.kind === 'comment' || event.kind === 'work_note') {
+    return (
+      <div className="mt-1 text-sm text-muted-foreground">
+        {who} {event.kind === 'comment' ? 'commented' : 'added a work note'}
+        {task && ' on this task'}
+      </div>
+    )
+  }
+
+  if (event.kind === 'approval') {
+    const badge = APPROVAL_BADGE[event.newValue ?? ''] ?? {
+      label: event.newValue || 'Approval updated',
+      variant: 'outline' as const,
+    }
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+        {who} <Badge variant={badge.variant} className={SMALL_BADGE}>{badge.label}</Badge>
+      </div>
+    )
+  }
+
+  // State transition — rendered with the validated status badge palette.
+  const isTask = event.table === 'change_task'
+  const from = asStateField(event.table, event.oldValue ?? '')
+  const to = asStateField(event.table, event.newValue ?? '')
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+      {who} <span>moved{isTask ? ' task' : ''}</span>
+      {isTask ? (
+        <TaskStateBadge state={from} className={SMALL_BADGE} />
+      ) : (
+        <StateBadge state={from} className={SMALL_BADGE} />
+      )}
+      <ArrowRight className="size-3.5 text-muted-soft" />
+      {isTask ? (
+        <TaskStateBadge state={to} className={SMALL_BADGE} />
+      ) : (
+        <StateBadge state={to} className={SMALL_BADGE} />
+      )}
+    </div>
+  )
+}
