@@ -8,30 +8,39 @@
 @source "../**/*.{tsx,ts,html}";
 
 /*
- * Flatten the hover variant to a bare `&:hover`, dropping Tailwind's default
- * `@media (hover: hover)` wrapper. Required for hover to be visible in DEV.
+ * Redefine the hover variant with the SAME semantics as Tailwind's default
+ * (`@media (hover: hover)` + `&:hover`) but the nesting order INVERTED. The
+ * gate is fully preserved — this is not a behaviour change, it is a workaround
+ * for a bundler bug, and hover still applies only on hover-capable devices.
  *
- * Tailwind v4 emits hover utilities double-nested:
+ * Tailwind v4's default emits hover utilities with `&` on the OUTSIDE:
  *     .hover\:bg-x { &:hover { @media (hover: hover) { ... } } }
  * The dev server's esbuild pass hoists that inner @media to the top level and
- * LOSES THE PARENT SELECTOR doing so, shipping an orphaned
+ * LOSES THE PARENT SELECTOR on the way, shipping an orphaned
  *     @media (hover: hover) { &:hover { ... } }
  * which matches nothing — every `hover:`/`group-hover:` class is dead CSS on
- * localhost. `active:`/`focus-visible:`/`sm:` are unaffected: they are never
- * double-nested, which is why press and focus states always worked.
+ * localhost, while `tailwind.generated.css` looks perfectly correct.
  *
- * The DEPLOY build (rollup) lowers the same input correctly — verified
- * 2026-07-12 by building both pipelines with and without this line — so the
- * breakage is dev-only. It is still worth fixing here rather than living with
- * it: dev is where all UI iteration happens, a hover you cannot see is a hover
- * you cannot design, and with the override both pipelines emit byte-comparable
- * hover CSS instead of disagreeing.
+ * With @media on the outside, esbuild hoists it and the parent survives:
+ *     @media (hover: hover) { .hover\:bg-x { &:hover { ... } } }   [dev]
+ *     @media (hover: hover) { .hover\:bg-x:hover { ... } }         [deploy]
+ * Both pipelines now emit gated, working hover. `active:`/`focus-visible:`/
+ * `sm:` were never affected: they are never double-nested, which is why press
+ * and focus states always worked and this stayed latent until the app's first
+ * hover class.
  *
- * Cost: hover is no longer gated to hover-capable devices, so a tapped control
- * can hold its warm tier until the next tap. This console is a desktop ops
- * surface; dev/prod parity is worth more than that edge.
+ * NB the deploy build (rollup) lowers BOTH orderings correctly — the breakage
+ * is dev-only. Verified 2026-07-12 by building each pipeline against each
+ * ordering. Do not "simplify" this to `@custom-variant hover (&:hover)`: that
+ * also fixes dev, but by DELETING the touch gate from production.
  */
-@custom-variant hover (&:hover);
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /* Design tokens (Claude / Anthropic editorial system — see DESIGN.md)         */
