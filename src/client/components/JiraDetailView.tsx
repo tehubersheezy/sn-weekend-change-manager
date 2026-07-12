@@ -120,7 +120,10 @@ export function JiraDetailView({
       ) : !issue ? (
         <NotFound issueKey={issueKey} references={references} onOpenChange={onOpenChange} />
       ) : (
-        <>
+        // Content arrival: this block mounts when the (non-silent) load
+        // resolves, so the rise fires on every record switch and never on a
+        // silent AMB refetch — "live means quiet" holds.
+        <div className="flex animate-rise-in flex-col gap-8">
           <header className="flex flex-col gap-4">
             {/* Identity is never colour-alone: the surface is blue AND it says
                 Jira in words. The key is the provenance mark, so it takes the one
@@ -227,7 +230,7 @@ export function JiraDetailView({
               </ol>
             )}
           </section>
-        </>
+        </div>
       )}
     </div>
   )
@@ -310,7 +313,15 @@ function ReferencedBy({
                 type="button"
                 title={`Open ${ref.changeNumber} on its Change tasks tab`}
                 onClick={() => onOpenChange(ref.changeSysId, 'tasks')}
-                className={cn(surface, 'active:bg-surface-soft', JIRA_FOCUS)}
+                // The cream card is native chrome, so it takes the NATIVE warm
+                // tier even on the blue pane — hover warmth is the console's
+                // cursor, like the coral focus ring, and it doesn't re-tint per
+                // surface. Press deepens to surface-card.
+                className={cn(
+                  surface,
+                  'transition-colors hover:border-hover-hairline hover:bg-hover-surface active:bg-surface-card',
+                  JIRA_FOCUS,
+                )}
               >
                 {body}
               </button>
@@ -341,7 +352,7 @@ function NotFound({
   onOpenChange: (sysId: string, tab?: DetailTab) => void
 }) {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex animate-rise-in flex-col gap-8">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
           <span className="font-medium text-jira-ink">Jira</span>

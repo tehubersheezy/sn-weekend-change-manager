@@ -22,6 +22,10 @@ const SelectTrigger = React.forwardRef<
     className={cn(
       'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3.5 py-2 font-sans text-base text-ink outline-none transition-colors',
       'data-[placeholder]:text-muted-soft',
+      // Fields warm their EDGE only on hover — no fill wash under text people
+      // read. The peach hairline is also the natural crescendo into focus,
+      // where the border flips to full coral.
+      'hover:border-hover-hairline',
       'focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-ring/15',
       'disabled:cursor-not-allowed disabled:opacity-50',
       '[&>span]:line-clamp-1',
@@ -73,8 +77,11 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       position={position}
+      // Fade only — the popper positions this panel with its own translate
+      // utilities, and a transform-carrying entrance would override them for
+      // its whole run, then snap. Menus also close instantly on purpose.
       className={cn(
-        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-border bg-background text-ink',
+        'relative z-50 max-h-96 min-w-[8rem] animate-fade-in overflow-hidden rounded-md border border-border bg-background text-ink',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1',
         className,
@@ -118,6 +125,11 @@ const SelectItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
+    // Deliberately NOT the hover-surface wash, and deliberately untransitioned:
+    // Radix's data-highlighted is the menu's keyboard cursor (pointer hover
+    // feeds the same state), so it keeps the stronger surface-card fill —
+    // weakening it to the hover whisper would cost keyboard users their place,
+    // and a colour glide on a fast-moving cursor reads as lag.
     className={cn(
       'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 font-sans text-sm text-ink outline-none',
       'data-[highlighted]:bg-surface-card data-[highlighted]:text-ink',

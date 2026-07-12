@@ -54,10 +54,15 @@ export function ChangeCard({
       }}
       aria-current={selected ? 'true' : undefined}
       className={cn(
-        'cursor-pointer p-6 active:bg-surface-soft',
+        // Press is surface-card — a preview of the selection it's about to
+        // cause. (surface-soft as a press is indistinguishable from the hover
+        // wash since the warm-tier amendment.)
+        'group cursor-pointer p-6 transition-colors active:bg-surface-card',
         FOCUS_RING,
-        // Selected = the cream category-tab-active treatment.
-        selected && 'bg-surface-card',
+        // Selected = the cream category-tab-active treatment, and it does NOT
+        // warm on hover: the card is already home. Unselected cards take the
+        // peach wash + warmed edge (the warm tier).
+        selected ? 'bg-surface-card' : 'hover:border-hover-hairline hover:bg-hover-surface',
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -67,7 +72,10 @@ export function ChangeCard({
           </div>
           <div className="mt-1 flex items-start gap-1.5 text-title-sm font-medium text-ink">
             <span className="min-w-0">{display(change.short_description) || 'Untitled change'}</span>
-            <ArrowRight className="mt-1 size-4 shrink-0 text-muted-soft" />
+            {/* The one kinetic accent on the app's primary object: the arrow
+                leans the way the card will take you. Dies under
+                prefers-reduced-motion (theme.css zeroes transition-transform). */}
+            <ArrowRight className="mt-1 size-4 shrink-0 text-muted-soft transition-transform group-hover:translate-x-0.5" />
           </div>
           {/* The meta line is content people read (group / type / risk), so it
               takes muted-foreground. Only the glyphs stay at muted-soft. */}

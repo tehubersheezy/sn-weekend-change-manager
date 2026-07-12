@@ -2,6 +2,7 @@ import type { ChangeRecord, TaskRecord } from '../types'
 import type { SnField } from '../utils/fields'
 import { display, value } from '../utils/fields'
 import { taskProgress } from '../utils/progress'
+import { entranceDelay } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { CenteredState } from './ChangeList'
 import { ChangeCard } from './ChangeCard'
@@ -37,29 +38,32 @@ export function ReviewList({
 
   return (
     <div className="flex flex-col gap-3">
-      {changes.map((c) => {
+      {/* Rows keyed by sys_id: an AMB refetch keeps the DOM nodes, so the
+          entrance replays only on real arrivals and screen switches. */}
+      {changes.map((c, i) => {
         const notes = display(c.close_notes)
         const hasOutcome = Boolean(value(c.close_code)) || Boolean(notes)
         return (
-          <ChangeCard
-            key={value(c.sys_id)}
-            change={c}
-            progress={taskProgress(tasksByChange.get(value(c.sys_id)) ?? [])}
-            selected={value(c.sys_id) === selectedId}
-            onOpen={onOpen}
-            extra={
-              hasOutcome ? (
-                <div className="flex items-start gap-3">
-                  <OutcomeBadge closeCode={c.close_code} />
-                  {notes && (
-                    <p className="line-clamp-2 min-w-0 text-caption text-muted-foreground">
-                      {notes}
-                    </p>
-                  )}
-                </div>
-              ) : undefined
-            }
-          />
+          <div key={value(c.sys_id)} className="animate-rise-in" style={entranceDelay(i)}>
+            <ChangeCard
+              change={c}
+              progress={taskProgress(tasksByChange.get(value(c.sys_id)) ?? [])}
+              selected={value(c.sys_id) === selectedId}
+              onOpen={onOpen}
+              extra={
+                hasOutcome ? (
+                  <div className="flex items-start gap-3">
+                    <OutcomeBadge closeCode={c.close_code} />
+                    {notes && (
+                      <p className="line-clamp-2 min-w-0 text-caption text-muted-foreground">
+                        {notes}
+                      </p>
+                    )}
+                  </div>
+                ) : undefined
+              }
+            />
+          </div>
         )
       })}
     </div>

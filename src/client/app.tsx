@@ -695,9 +695,13 @@ function ViewToggle({
           title={`${label} view`}
           onClick={() => onChange(key)}
           className={cn(
-            'inline-flex items-center rounded-md p-2',
+            'inline-flex items-center rounded-md p-2 transition-colors',
             FOCUS_RING,
-            view === key ? 'bg-surface-card text-ink' : 'text-muted-foreground',
+            // The active view is home and doesn't warm; the others take the
+            // warm tier's peach wash on hover.
+            view === key
+              ? 'bg-surface-card text-ink'
+              : 'text-muted-foreground hover:bg-hover-surface',
           )}
         >
           <Icon className="size-4" />

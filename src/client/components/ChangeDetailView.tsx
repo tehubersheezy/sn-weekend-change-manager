@@ -151,7 +151,9 @@ export function ChangeDetailView({
           <p className="text-body-sm text-error-ink">{error || 'Change not found.'}</p>
         </div>
       ) : (
-        <>
+        // Content arrival: mounts when the (non-silent) load resolves — the
+        // rise fires on every record switch, never on a silent AMB refetch.
+        <div className="flex animate-rise-in flex-col gap-8">
           <header className="flex flex-col gap-4">
             <div className="font-sans text-caption text-muted-foreground">
               {display(change.number)}
@@ -264,7 +266,7 @@ export function ChangeDetailView({
               <JiraList issues={jiras} summaries={jiraSummaries} onOpen={onOpenJira} />
             </TabsContent>
           </Tabs>
-        </>
+        </div>
       )}
     </div>
   )

@@ -43,6 +43,18 @@ colors:
   teal-ink: "#0b6e5a"
   amber-ink: "#8f4a15"
 
+  # THE WARM TIER — hover. An amendment (2026-07, owner's instruction): this doc
+  # used to forbid hover states entirely; it no longer does. Hover is CHROMATIC —
+  # the element under the cursor leans toward the brand coral (OKLCH hue ~40) by
+  # one whisper. Never a grey darken, never an opacity change. Selection lives in
+  # the cream ladder (H ~83, yellow-warm); hover leans peach (the coral
+  # direction) — "where you are" and "where the cursor is" are different hues.
+  # See Interaction: Hover & Motion for the grammar and the numbers.
+  hover-ink: "#482c22"       # interactive TYPE under the cursor — ink pulled 35% toward primary-ink; 12.0:1 on canvas
+  hover-surface: "#f6efe9"   # the wash on unfilled clickables — canvas + 8% coral; muted stays 5.1:1 on it
+  hover-hairline: "#e0c5b9"  # the warmed edge on outlined clickables — hairline + 25% coral
+  hover-primary: "#bb684d"   # the coral fill's hover — halfway to primary-active; white on it 4.0:1
+
   # FOREIGN RECORDS. The one blue in the system, and the only hue admitted since
   # the extraction. It does not mean accent, link, info or done. It means exactly
   # one thing: this record does not live in ServiceNow. Blue is PAPER, not INK.
@@ -59,6 +71,12 @@ colors:
   jira-canvas: "#f2f8ff"
   jira-card: "#deeafb"
   jira-hairline: "#c3d7f2"
+  # The boundary object's hover. Stays INSIDE the blue family (warming a Jira
+  # chip toward coral would repaint provenance as emphasis) and lives in the
+  # EDGE, not the fill — jira-ink on any usefully-deeper fill drops under 4.5:1
+  # (4.17 at the gentlest perceptible step). jira-hairline pulled 25% toward
+  # jira-ink; press firms the edge the rest of the way to jira-ink itself.
+  jira-hairline-hover: "#9fbbdf"
   jira-on: "#f2f8ff"
 
 typography:
@@ -175,6 +193,18 @@ spacing:
   xxl: 48px
   section: 96px
 
+# This console's addition, not claude.com's (the extraction shipped no motion —
+# see Known Gaps). One curve, three time bands. Implemented as theme.css
+# --animate-* tokens + Tailwind's default transition settings, so every
+# transition-colors in the app shares the curve with nothing at the call site.
+# See Interaction: Hover & Motion.
+motion:
+  ease: "cubic-bezier(0.25, 1, 0.5, 1)"  # ease-out-quart — the only curve; no bounce, no elastic
+  duration-state: 150ms      # hover / press / focus colour glides; crossfades (fade-in)
+  duration-entrance: 220ms   # content arrival (rise-in: fade + 4px rise)
+  duration-open: 200ms       # dialog open — exits run ~75% (150ms)
+  stagger: 20ms              # list-row entrance step, capped at 12 rows (240ms ceiling)
+
 components:
   button-primary:
     backgroundColor: "{colors.primary}"
@@ -183,6 +213,10 @@ components:
     rounded: "{rounded.md}"
     padding: 12px 20px
     height: 40px
+  button-primary-hover:
+    backgroundColor: "{colors.hover-primary}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.md}"
   button-primary-active:
     backgroundColor: "{colors.primary-active}"
     textColor: "{colors.on-primary}"
@@ -198,6 +232,14 @@ components:
     rounded: "{rounded.md}"
     padding: 12px 20px
     height: 40px
+  # The outlined pattern: edge and fill warm together. Press deepens to
+  # {colors.surface-card} — surface-soft as a press is indistinguishable from
+  # this hover wash.
+  button-secondary-hover:
+    backgroundColor: "{colors.hover-surface}"
+    borderColor: "{colors.hover-hairline}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
   button-secondary-on-dark:
     backgroundColor: "{colors.surface-dark-elevated}"
     textColor: "{colors.on-dark}"
@@ -217,6 +259,12 @@ components:
     backgroundColor: transparent
     textColor: "{colors.primary-ink}"
     typography: "{typography.body-md}"
+  # Every interactive word — ink, muted or coral at rest — converges on
+  # {colors.hover-ink} under the cursor: one warm voice for "this will act".
+  # Underline stays the press state.
+  text-link-hover:
+    backgroundColor: transparent
+    textColor: "{colors.hover-ink}"
   top-nav:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
@@ -303,6 +351,12 @@ components:
     typography: "{typography.nav-link}"
     padding: 8px 14px
     rounded: "{rounded.md}"
+  # Inactive tabs only. The active tab is already home in {colors.surface-card}
+  # and does not warm — hover marks a move you could make, not where you are.
+  category-tab-hover:
+    backgroundColor: "{colors.hover-surface}"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.md}"
   category-tab-active:
     backgroundColor: "{colors.surface-card}"
     textColor: "{colors.ink}"
@@ -357,6 +411,16 @@ components:
     rounded: "{rounded.xs}"
     padding: 1px 6px
     fontFeature: tabular-nums
+  # When the chip is a LINK (JiraLink), its hover firms the EDGE within the blue
+  # family; fill and ink never move (fill: contrast arithmetic; toward coral:
+  # provenance is not emphasis). Press takes the border to {colors.jira-ink}.
+  # Display-only chips (a task row naming its key) have no hover.
+  jira-key-chip-hover:
+    backgroundColor: "{colors.jira-card}"
+    borderColor: "{colors.jira-hairline-hover}"
+    borderWidth: 1px
+    textColor: "{colors.jira-ink}"
+    rounded: "{rounded.xs}"
   # Jira status category. ServiceNow badges are PILLS; Jira badges are STAMPS
   # ({rounded.xs}). One hue, three ink densities — hollow -> tinted -> solid. The
   # ladder is lightness, not hue, so it survives CVD and greyscale. A Jira "Done"
@@ -456,7 +520,7 @@ The dark surfaces are where Claude shows its product chrome — code blocks, ter
 
 ### Brand & Accent
 - **Coral / Primary** (`{colors.primary}` — #cc785c): The signature Anthropic warm coral. Used on every primary CTA background, on full-bleed coral callout cards, on the brand wordmark accent. The most-recognized Anthropic color outside of the spike-mark logo.
-- **Coral Active** (`{colors.primary-active}` — #a9583e): The press / hover-darker variant.
+- **Coral Active** (`{colors.primary-active}` — #a9583e): The press variant. Hover stops halfway there (`{colors.hover-primary}` — #bb684d), so a press still reads as a further commitment beyond the hover.
 - **Coral Ink** (`{colors.primary-ink}` — #a9583e): Coral as *type*. Same hex as the press variant, named for its role. `{colors.primary}` is a fill: 3.1:1 on cream, fine behind white button type, an AA failure as type. Any coral word — inline link, text button — uses this.
 - **Coral Disabled** (`{colors.primary-disabled}` — #e6dfd8): A desaturated cream-tinted disabled state.
 - **Accent Teal** (`{colors.accent-teal}` — #5db8a6): Used sparingly on secondary product surfaces (terminal status indicators, "active connection" dots in connectors page).
@@ -636,7 +700,7 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 
 ### Buttons
 
-**`button-primary`** — The signature coral CTA. Background `{colors.primary}` (#cc785c), text `{colors.on-primary}` (white), type `{typography.button}` (StyreneB 14px / 500), padding 12px × 20px, height 40px, rounded `{rounded.md}` (8px). Active state `button-primary-active` darkens to `{colors.primary-active}` (#a9583e).
+**`button-primary`** — The signature coral CTA. Background `{colors.primary}` (#cc785c), text `{colors.on-primary}` (white), type `{typography.button}` (StyreneB 14px / 500), padding 12px × 20px, height 40px, rounded `{rounded.md}` (8px). Hover deepens to `{colors.hover-primary}` (#bb684d); active state `button-primary-active` darkens the rest of the way to `{colors.primary-active}` (#a9583e).
 
 **`button-secondary`** — Cream button with hairline outline. Background `{colors.canvas}`, text `{colors.ink}`, 1px hairline border, same padding + height + radius as primary.
 
@@ -646,7 +710,7 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 
 **`button-icon-circular`** — 36px circular icon button. Background `{colors.canvas}`, hairline border, ink-color icon. Used for carousel arrows, share, "view more".
 
-**`text-link`** — Inline body links in `{colors.primary-ink}` — coral as type, not the fill hue (see Colors > Semantic). Underlined on press; the coral inline link is one of the system's most distinctive small details.
+**`text-link`** — Inline body links in `{colors.primary-ink}` — coral as type, not the fill hue (see Colors > Semantic). Hover warms to `{colors.hover-ink}` (every interactive word converges there); underlined on press. The coral inline link is one of the system's most distinctive small details.
 
 ### Cards & Containers
 
@@ -682,7 +746,7 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 
 **`focus-ring`** — A 2px ring in full-strength `{colors.primary}` (coral), held 2px off the element **in the colour of the surface the element sits on**. One recipe, every interactive element: buttons, tabs, cards-as-buttons, inline links, dialog close. This is the console's only focus treatment.
 
-The system's rule is "never document hover; default and active/pressed only" — focus is neither, and it is not a style choice. Cards in this console are `<button>`s and the interface is stated to be keyboard-operable, so the indicator is a hard requirement (WCAG 2.4.11 wants ≥ 3:1 against what's adjacent). Full-strength coral on cream is **3.11:1** and clears it.
+Focus is not a style choice, and it is not hover: the warm tier (see Interaction: Hover & Motion) marks where the *cursor* is; this ring marks where the *keyboard* is, and the two never substitute for each other. Cards in this console are `<button>`s and the interface is stated to be keyboard-operable, so the indicator is a hard requirement (WCAG 2.4.11 wants ≥ 3:1 against what's adjacent). Full-strength coral on cream is **3.11:1** and clears it. Note the ring's 2px offset band is canvas-coloured, which also means a hover fill can never touch the ring — its contrast is always measured against the canvas.
 
 **The offset colour is a variable, not a constant.** This doc used to pin it to `{colors.canvas}`, and that was only ever true because canvas was the sole surface a marketing page had. The rule is: *the offset takes the colour of whatever the element is sitting on.* Get it wrong and the ring floats on a 2px band of the wrong colour — on `{component.jira-surface}` a cream offset is a visible cream halo on blue paper. Because the offset band and the surface outside the ring are then the same colour, the only contrast that ever matters is **coral against the surface the element sits on**:
 
@@ -842,6 +906,72 @@ The corollary: **do not create cool text tokens.** Body copy, meta lines and lab
 
 Jira sets issue keys in mono. **We do not.** `NET-4821` is the sans stack with `tabular-nums`, like every other identifier in this console. See Typography > Monospace — it is not negotiable, and the Jira surface is the single most tempting place in the app to break it (keys, descriptions, stack traces in comments). Descriptions and comment bodies are `<div>` with `whitespace-pre-wrap`. **Never a `<pre>`, never a `<code>`.**
 
+## Interaction: Hover & Motion
+
+*An amendment (2026-07, owner's instruction). This document used to rule "never document hover — Default and Active/Pressed states only," and the console shipped that way. The owner has explicitly overruled it: every clickable now shifts hue on hover, and the interface carries a small, quiet motion system. This section supersedes the old rule everywhere it appears; the Iteration Guide and the Don'ts have been amended to match.*
+
+### The warm tier: hover is the cursor's heat
+
+The thesis is one sentence: **hover is chromatic — the element under the cursor leans toward the brand coral by one whisper.** Never a grey darken, never an opacity change, never a shadow. The lean is hue movement (toward OKLCH H ~40, the coral corridor), which is what makes it feel like *this* system warming rather than any system highlighting.
+
+Coral scarcity survives by construction: only one element wears the warmth at a time — the one under the cursor — so the resting canvas never gains a drop of coral. And the tier is deliberately a different *hue* from selection, not a different depth: selected and active elements sit in the cream ladder (`{colors.surface-card}`, H ~83 — yellow-warm); the hover wash leans **peach** (H ~63, the coral direction). *Where you are* and *where your cursor is* are chromatically distinct, so a hover can never be mistaken for a selection.
+
+Four native tokens and one foreign one carry the whole tier:
+
+| Token | Derivation | Measured |
+|---|---|---|
+| `{colors.hover-ink}` #482c22 | ink pulled 35% toward `{colors.primary-ink}` (OKLCH H 40, C 0.045) | 12.0:1 on canvas · 10.5:1 on surface-card · 11.8:1 on jira-canvas |
+| `{colors.hover-surface}` #f6efe9 | canvas + 8% coral — surface-soft's weight, peach instead of yellow | `{colors.muted}` on it 5.12:1 · body 9.57:1 |
+| `{colors.hover-hairline}` #e0c5b9 | hairline + 25% coral | decorative edge, 1.55:1 on canvas |
+| `{colors.hover-primary}` #bb684d | the exact primary → primary-active midpoint | white on it **4.04:1** — rest is 3.28, press is 5.06: hover *improves* legibility on the way down |
+| `{colors.jira-hairline-hover}` #9fbbdf | jira-hairline pulled 25% toward jira-ink (H 255, in-family) | decorative edge — see Foreign records below |
+
+The coral focus ring is untouched by all of this: `FOCUS_RING`'s 2px offset band is canvas-coloured, so the ring is always measured against the canvas (3.11:1) and never meets a hover fill.
+
+### The grammar: one lean per element
+
+Each clickable makes **one** perceptible move on hover, chosen by what the element is made of:
+
+| Element | Rest | Hover | Press |
+|---|---|---|---|
+| Interactive type (record links, coral links, dialog close) | `{colors.ink}` / `{colors.muted}` / `{colors.primary-ink}` | **`{colors.hover-ink}`** — every interactive word converges on one warm voice | underline (links) |
+| Unfilled containers (rows-as-buttons, ghost buttons, inactive tabs, nav items, view toggles, timeline rows) | transparent / canvas | **`{colors.hover-surface}`** wash | `{colors.surface-card}` |
+| Outlined controls (secondary buttons, bordered cards-as-buttons) | hairline edge, canvas fill | edge → **`{colors.hover-hairline}`** *and* fill → wash (the one two-move pattern: both are whispers) | `{colors.surface-card}` |
+| Form fields (inputs, select triggers) | hairline edge | edge → **`{colors.hover-hairline}`** only — no wash under text people read; focus then flips the same border to full coral | — |
+| Filled cream pills (person badges, task pills) | `{colors.surface-card}` | **`{colors.surface-cream-strong}`** — already cream, so the warmth gain comes from the ladder, not the peach wash | — |
+| The coral button | `{colors.primary}` | **`{colors.hover-primary}`** | `{colors.primary-active}` |
+| The Jira key chip (as a link) | `{colors.jira-hairline}` edge | **`{colors.jira-hairline-hover}`** — the edge firms, in the blue family | edge → `{colors.jira-ink}` |
+
+**The press ladder moved with the amendment.** The interactive cream ladder is now canvas → `{colors.hover-surface}` (hover) → `{colors.surface-card}` (press *and* selected — a press previews the selection it causes). `{colors.surface-soft}` as a press state on a clickable is a bug since this amendment: it is indistinguishable from the hover wash sitting under it.
+
+### Rules with teeth
+
+- **Selected elements don't warm.** The active tab, the current nav item, the selected card and the selected timeline row are already home; hover marks a move you could make, not the place you are. Apply hover classes conditionally on `!selected`.
+- **Foreign records hover in their own family.** A Jira object never leans toward coral — that would repaint provenance as emphasis, breaking "blue is a ground." Its hover lives in the chip's **edge** (never the fill: `{colors.jira-ink}` on any usefully-deeper fill drops under 4.5:1 — 4.17 at the gentlest perceptible step). Native chrome on the Jira pane (the Referenced-by cream cards, the back button, the issue rows in the Jiras tab) takes the **native** warm tier even there: hover warmth is the console's cursor, like the coral focus ring, and it does not re-tint per surface.
+- **The timeline's bars never shift.** The bar palette is dataviz-validated against the cream canvas; a hue shift on hover would repaint the one channel that carries state. The *row* takes the wash; the bar is inert.
+- **Radix `data-[highlighted]` keeps `{colors.surface-card}`, untransitioned.** A menu's highlight is its keyboard cursor (pointer hover feeds the same state); weakening it to the hover whisper would cost keyboard users their place, and a colour glide on a fast-moving cursor reads as lag.
+- **Status pills never shift hue under a cursor.** A pill's hue is its meaning. (Pills that are *buttons* — person badges — are cream `badge-pill`s and deepen on the ladder, which changes no meaning.)
+- **Hover is NOT gated to devices that hover, and that is deliberate.** Tailwind v4 normally wraps `hover:` in `@media (hover: hover)`, but `@custom-variant hover (&:hover)` in `theme.css` strips that wrapper — not as a taste call, but because the double-nesting it produces does not survive the **dev server's** bundler, which drops the parent selector and renders every hover class inert on localhost (see CLAUDE.md > Frontend gotchas). The deployed build is unaffected, but a hover you cannot see in dev is a hover you cannot design. The cost is that a tapped control can hold its warm tier until the next tap; this console is a desktop ops surface, and that is a trade worth making.
+
+### Motion
+
+*The extraction shipped none (claude.com's marketing animations were out of scope — see Known Gaps); this is the console's own system, built to the product register: motion conveys state — feedback, arrival, reveal — never decoration, and there is no page-load choreography.*
+
+**One curve, three time bands** (`motion:` in the frontmatter): ease-out-quart for everything — no bounce, no elastic — at 150ms for state glides, 220ms for content arrival, 200ms/150ms for the dialog's open/close (exits run ~75% of entrances).
+
+The system is five `--animate-*` tokens in `theme.css` plus a retuned Tailwind default, and every piece has one job:
+
+- **`transition-colors` everywhere interactive.** Tailwind's `--default-transition-duration`/`--default-transition-timing-function` are set once in `theme.css`, so every hue shift in the app — hover, press, focus border — glides on the same 150ms quart-out curve with nothing at the call site. This is what makes the warm tier feel like one system instead of thirty sprinkled classes.
+- **`animate-rise-in`** (fade + 4px rise, 220ms): content arrival. Detail-pane records mount with it when their load resolves — so it fires on every record switch and **never on a silent AMB refetch**; list and feed rows carry it with a 20ms stagger capped at 12 rows (`entranceDelay` in `lib/utils.ts` — a 100-row list settles in under half a second); the grid enters as one block (a hundred `<tr>`s animating transform under a sticky header is paint risk for zero read benefit).
+- **`animate-fade-in`** (150ms crossfade): lateral moves — tab panels and select menus. A tab switch is a move between siblings, so the panel fades in place rather than rising. Menus close instantly on purpose.
+- **`animate-dialog-in` / `-out`** (200ms/150ms, scale 0.97 ⇄ 1): the window-settings dialog and the grid popout. The keyframes bake in the `-50%` centering translate, because an animation owns `transform` for its whole run.
+- **Live means quiet, and now it means *seen*.** The feed keys rows by event id, so a silent refetch keeps existing DOM and only a genuinely new event mounts — rising in at the top with zero delay: the arrival is the telemetry, no toast. Badges carry `transition-colors` in their base, so when AMB moves a change's state the pill's hue *glides* to the new meaning on the same DOM node. The task progress bar's width glides (300ms) instead of teleporting.
+- **One kinetic accent, total.** The change card's arrow leans 2px toward where the card will take you (`group-hover`). That is the delight budget; nothing else moves on hover.
+
+**Reduced motion is the law.** `theme.css` ends with an unlayered `prefers-reduced-motion` block: every transform-carrying animation and transition collapses to `none` (entrances, the dialog scale, crossfades, the arrow nudge, the width glide) while pure colour transitions stay — a hue shift is not motion, and it remains useful feedback. `animation: none` rather than a near-zero duration matters for the dialog: Radix unmounts a closing dialog immediately when no exit animation is running, which is exactly the instant close a reduced-motion user asked for.
+
+**What this system deliberately does not do:** no hover scaling or lifting (hue is the language, and there are no shadows to lift with), no skeleton flashes on live refetches, no scroll-triggered reveals, no spinner replacing content, no motion on the stat chips or headers at load. A console is glanced at for sixty hours straight; the motion budget is spent where state actually changes.
+
 ## Do's and Don'ts
 
 ### Do
@@ -860,7 +990,7 @@ Jira sets issue keys in mono. **We do not.** `NET-4821` is the sans stack with `
 - Don't put coral everywhere. The coral is scarce on individual elements and generous only on full-bleed coral callout cards.
 - Don't use Inter for display headlines. The serif character is the brand voice.
 - Don't repeat the same surface mode in two consecutive bands. The pacing alternates: cream → cream-card → dark-mockup → cream → coral-callout → dark-footer.
-- Don't add hover state styling beyond what the system already encodes — primary darkens on press; nothing else changes.
+- Don't hover in greyscale, opacity or shadow — hover is **chromatic** (the warm tier: a coral lean for native chrome, an edge-firming within blue for foreign objects; see Interaction: Hover & Motion). And don't let hover repaint meaning: selected elements are already home and don't warm, timeline bars and status pills never shift hue under a cursor, and a Jira object never leans toward coral.
 - Don't reach for monospace, ever — not for record numbers, IDs, timestamps, or plan text. There is no mono face in this system. When digits must align, use `tabular-nums` on the sans face.
 - Don't paint a status label in its own fill hue. Tinted pills take the `-ink` step; the fill hue as text is 1.8–2.1:1.
 - Don't invent a type size. If it isn't on the scale, it's a bug — and don't hand-tune tracking, it ships with the size.
@@ -899,7 +1029,7 @@ Jira sets issue keys in mono. **We do not.** `NET-4821` is the sans stack with `
 1. Focus on ONE component at a time. Reference its YAML key (`{component.feature-card}`, `{component.code-window-card}`).
 2. Variants of an existing component (`-active`, `-disabled`, `-focused`) live as separate entries in `components:`.
 3. Use `{token.refs}` everywhere — never inline hex.
-4. Never document hover. Default and Active/Pressed states only — **plus Focus**, which is an accessibility requirement, not a style state. `{component.focus-ring}` is the one recipe; don't leave it out because this rule used to end at "Pressed".
+4. Document four states: Default, **Hover**, Active/Pressed, and Focus. Hover (amended 2026-07 by the owner — this rule used to read "never document hover") is the chromatic warm tier: one lean per element, per the grammar in Interaction: Hover & Motion; a `-hover` entry lives beside its base component like every other variant. Focus is still an accessibility requirement, not a style state — `{component.focus-ring}` is the one recipe, and hover never substitutes for it.
 5. Display headlines stay Copernicus serif 400 with negative tracking. Body stays StyreneB / Inter 400. The split is unbreakable.
 6. Cream + coral + dark is the trinity. Don't introduce a fourth surface tone (no purple cards, no green sections). **One exception exists and it is closed:** `{colors.jira-canvas}` — see Foreign Records. It is admitted to carry a semantic the system had no way to express (this record is not ours), not to add a colour. It is not a precedent for a fifth tone: a new surface tone has to justify itself by naming a *missing semantic*, not a mood. "Purple for security changes" is a mood. There is no second exception pending.
 7. When in doubt about emphasis: bigger Copernicus serif before bolder weight.
@@ -908,7 +1038,7 @@ Jira sets issue keys in mono. **We do not.** `NET-4821` is the sans stack with `
 
 - Copernicus and StyreneB are licensed Anthropic typefaces and not available as public web fonts. Substitutes (Tiempos Headline / Cormorant Garamond / EB Garamond for serif; Inter / Söhne for sans) are documented in the typography section.
 - The Anthropic radial-spike-mark is a brand glyph rendered as inline SVG; it's not formalized as a system token here. Treat it as a logo asset.
-- Animation and transition timings (chat message reveal, code block typewriter effect on the homepage, agentic-flow diagram animations) are not in scope.
+- claude.com's own animations (chat message reveal, code block typewriter effect, agentic-flow diagrams) were never extracted and remain out of scope. The console no longer inherits that gap: it defines its own motion system — `motion:` in the frontmatter, prose in Interaction: Hover & Motion — built for the product register rather than recovered from the marketing site.
 - Form validation states beyond `{component.text-input-focused}` are not extracted — error / success states would need a sign-up or feedback flow to confirm.
 - The actual Claude product surface (claude.ai chat interface) shares some tokens with the marketing site but adds many product-specific components (chat bubbles, message tools, file upload chips, conversation history sidebar) that are out of scope for this marketing-surface document.
 - The "agent" / "computer use" demo cards on certain pages display animated Claude controlling a browser — the static screenshot doesn't fully capture the animation chrome.

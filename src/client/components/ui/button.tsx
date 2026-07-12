@@ -16,19 +16,25 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // button-primary → coral fill, white text, darkens on press, cream-tinted disabled.
+        // button-primary → coral fill, white text. Hover deepens halfway to the
+        // press colour (the warm tier), press lands on primary-active.
         default:
-          'rounded-md bg-primary text-primary-foreground active:bg-primary-active disabled:bg-border disabled:text-muted-foreground',
-        // button-secondary → cream canvas fill with hairline outline, ink text.
+          'rounded-md bg-primary text-primary-foreground hover:bg-hover-primary active:bg-primary-active disabled:bg-border disabled:text-muted-foreground',
+        // button-secondary → cream canvas fill with hairline outline. Hover
+        // warms both edge and fill; press deepens to surface-card (surface-soft
+        // as a press is invisible next to the hover wash since the amendment).
         secondary:
-          'rounded-md border border-border bg-background text-ink active:bg-surface-soft disabled:text-muted-foreground',
-        // Inline transparent button; subtle cream wash on press.
+          'rounded-md border border-border bg-background text-ink hover:border-hover-hairline hover:bg-hover-surface active:bg-surface-card disabled:text-muted-foreground',
+        // Inline transparent button; peach wash on hover, cream-card press.
         ghost:
-          'rounded-md text-ink active:bg-surface-card disabled:text-muted-foreground',
-        // text-link → inline coral link, underline on press. Coral as TYPE takes
+          'rounded-md text-ink hover:bg-hover-surface active:bg-surface-card disabled:text-muted-foreground',
+        // text-link → inline coral link. Hover converges on hover-ink like every
+        // interactive word; underline is the press state. Coral as TYPE takes
         // primary-ink: the fill hue is 3.1:1 on cream, an AA failure at any size.
-        link: 'text-primary-ink underline-offset-4 active:underline disabled:text-muted-foreground',
-        // button-secondary-on-dark → elevated dark fill, cream text (over dark surfaces).
+        link: 'text-primary-ink underline-offset-4 hover:text-hover-ink active:underline disabled:text-muted-foreground',
+        // button-secondary-on-dark → elevated dark fill, cream text (over dark
+        // surfaces). No hover step: the dark family has no warm tier and no live
+        // surface in this console — derive one only when a dark surface ships.
         darkSecondary:
           'rounded-md bg-surface-dark-elevated text-on-dark active:bg-surface-dark-soft disabled:opacity-50',
       },

@@ -7,7 +7,8 @@ import { JiraKeyChip } from './JiraBadges'
  * They read as interactive by weight and ink-darkness against the muted text
  * around them, not by color: coral is the system's link accent but it has to
  * stay scarce, and a feed row can carry three of these across eighty rows.
- * Underline is a press state only — DESIGN.md allows no hover styling.
+ * On hover the ink warms to hover-ink — the warm tier's one voice for
+ * interactive type — and underline stays the press state.
  *
  * Focus is the app's one recipe (FOCUS_RING, which brings its own outline-none).
  * These used to carry the coral-at-15% halo instead — 1.16:1 on cream. That halo
@@ -19,7 +20,7 @@ import { JiraKeyChip } from './JiraBadges'
  * inside an `overflow-hidden` line has to leave it room or the ring is clipped
  * away to nothing — see the meta line in ActivityFeed's FeedRow.
  */
-const INLINE_LINK = `rounded-sm font-medium text-ink underline-offset-4 active:underline ${FOCUS_RING}`
+const INLINE_LINK = `rounded-sm font-medium text-ink transition-colors hover:text-hover-ink underline-offset-4 active:underline ${FOCUS_RING}`
 
 /** A record number that opens something inside the console. */
 export function RecordLink({
@@ -60,6 +61,11 @@ export function RecordLink({
  * Focus keeps the NATIVE recipe: this button sits on cream, and the ring's offset
  * is always the colour of the surface the element is on. Only the Jira pane itself
  * flips that offset to {colors.jira-canvas}.
+ *
+ * Hover stays inside the BLUE family (`interactive` on the chip): a foreign
+ * object never warms toward coral — that would repaint its provenance as
+ * emphasis. The button is a `group` because the hover states live on the chip's
+ * own border, where the boundary object keeps all of its identity.
  */
 export function JiraLink({
   issueKey,
@@ -73,9 +79,9 @@ export function JiraLink({
       type="button"
       title={`Open ${issueKey}`}
       onClick={() => onOpen(issueKey)}
-      className={cn('rounded-xs align-baseline', FOCUS_RING)}
+      className={cn('group rounded-xs align-baseline', FOCUS_RING)}
     >
-      <JiraKeyChip issueKey={issueKey} />
+      <JiraKeyChip issueKey={issueKey} interactive />
     </button>
   )
 }

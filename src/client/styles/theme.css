@@ -7,6 +7,32 @@
  */
 @source "../**/*.{tsx,ts,html}";
 
+/*
+ * Flatten the hover variant to a bare `&:hover`, dropping Tailwind's default
+ * `@media (hover: hover)` wrapper. Required for hover to be visible in DEV.
+ *
+ * Tailwind v4 emits hover utilities double-nested:
+ *     .hover\:bg-x { &:hover { @media (hover: hover) { ... } } }
+ * The dev server's esbuild pass hoists that inner @media to the top level and
+ * LOSES THE PARENT SELECTOR doing so, shipping an orphaned
+ *     @media (hover: hover) { &:hover { ... } }
+ * which matches nothing — every `hover:`/`group-hover:` class is dead CSS on
+ * localhost. `active:`/`focus-visible:`/`sm:` are unaffected: they are never
+ * double-nested, which is why press and focus states always worked.
+ *
+ * The DEPLOY build (rollup) lowers the same input correctly — verified
+ * 2026-07-12 by building both pipelines with and without this line — so the
+ * breakage is dev-only. It is still worth fixing here rather than living with
+ * it: dev is where all UI iteration happens, a hover you cannot see is a hover
+ * you cannot design, and with the override both pipelines emit byte-comparable
+ * hover CSS instead of disagreeing.
+ *
+ * Cost: hover is no longer gated to hover-capable devices, so a tapped control
+ * can hold its warm tier until the next tap. This console is a desktop ops
+ * surface; dev/prod parity is worth more than that edge.
+ */
+@custom-variant hover (&:hover);
+
 /* -------------------------------------------------------------------------- */
 /* Design tokens (Claude / Anthropic editorial system — see DESIGN.md)         */
 /* shadcn-convention CSS variables mapped from the DESIGN.md palette.          */
@@ -99,6 +125,49 @@
   --primary-ink: #a9583e;
 
   /* ------------------------------------------------------------------------ */
+  /* THE WARM TIER — hover. See DESIGN.md > Interaction: Hover & Motion.       */
+  /* ------------------------------------------------------------------------ */
+  /*
+   * An amendment: this system used to document no hover states at all, and the
+   * owner has overruled that for this console. Hover is CHROMATIC — the element
+   * under the cursor leans toward the brand coral (OKLCH hue ~40) by one
+   * whisper. Never a grey darken, never an opacity change, and never a second
+   * voltage: only one element wears the warmth at a time, so coral scarcity is
+   * preserved by construction.
+   *
+   * The tier is chromatically distinct from SELECTION on purpose. Selected /
+   * active elements sit in the cream ladder (surface-card, H ~83 — yellow-warm);
+   * the hover wash leans peach (H ~63, the coral direction). "Where you are" and
+   * "where your cursor is" are different hues, not different depths.
+   *
+   * Because hover now occupies the old press tints, presses DEEPEN one step:
+   * the interactive cream ladder is canvas → hover-surface (hover) →
+   * surface-card (press = a preview of selection). active:bg-surface-soft on a
+   * clickable is a bug since this amendment: it is indistinguishable from the
+   * hover wash under it.
+   *
+   * Measured (fg on bg, WCAG):
+   *   --hover-ink on canvas 12.0 · on surface-card 10.5 · on jira-canvas 11.8
+   *   --muted-foreground on --hover-surface 5.12  (body-text on it 9.57)
+   *   white on --hover-primary 4.04  [rest coral is 3.28; press is 5.06 — hover
+   *     sits exactly halfway and IMPROVES legibility on the way down]
+   * The coral focus ring never meets a hover fill: FOCUS_RING's 2px offset band
+   * is canvas-coloured, so ring contrast is always measured against the canvas.
+   */
+  /* Interactive TYPE under the cursor: ink pulled 35% toward --primary-ink.
+     Every interactive word — ink links, muted links, coral links — converges
+     here on hover: one warm voice for "this will act". */
+  --hover-ink: #482c22;
+  /* Unfilled clickables (rows, ghost buttons, tabs, nav items) gain this wash:
+     canvas + 8% coral. Surface-soft's weight, peach instead of yellow. */
+  --hover-surface: #f6efe9;
+  /* Outlined clickables (secondary buttons, inputs, bordered cards) warm their
+     edge: hairline + 25% coral. */
+  --hover-hairline: #e0c5b9;
+  /* The coral fill deepens halfway to the press colour. */
+  --hover-primary: #bb684d;
+
+  /* ------------------------------------------------------------------------ */
   /* FOREIGN RECORDS — the Jira family. See DESIGN.md > Foreign Records.       */
   /* ------------------------------------------------------------------------ */
   /*
@@ -174,6 +243,17 @@
    */
   --jira-hairline: #c3d7f2;
   /*
+   * The boundary object's hover. A foreign object's hover stays INSIDE the blue
+   * family — warming a Jira chip toward coral would repaint its provenance —
+   * and it lives in the EDGE, not the fill. That is arithmetic again, not
+   * taste: --jira-ink on any usefully-deeper fill drops under 4.5:1 (4.17 at
+   * the gentlest perceptible step), so the fill cannot move. The border can:
+   * --jira-hairline pulled 25% toward --jira-ink (H 255, in-family). Press
+   * firms it the rest of the way to --jira-ink itself. "An object that crosses
+   * a boundary brings its own edge" — and its hover firms that edge.
+   */
+  --jira-hairline-hover: #9fbbdf;
+  /*
    * Type on a --jira-ink fill. Same hex as --jira-canvas, named for its role —
    * exactly the precedent --on-dark sets against --canvas.
    */
@@ -233,6 +313,13 @@
   --color-amber-ink: var(--amber-ink);
   --color-primary-ink: var(--primary-ink);
 
+  /* The warm tier (hover) — see the notes above. Emitted as hover:text-hover-ink,
+     hover:bg-hover-surface, hover:border-hover-hairline, hover:bg-hover-primary. */
+  --color-hover-ink: var(--hover-ink);
+  --color-hover-surface: var(--hover-surface);
+  --color-hover-hairline: var(--hover-hairline);
+  --color-hover-primary: var(--hover-primary);
+
   /*
    * Foreign records (Jira). The exception to "every hue has a fill and an ink":
    * this one has only an ink — a light blue cannot clear 3:1 (see the note above).
@@ -248,6 +335,7 @@
   --color-jira-canvas: var(--jira-canvas);
   --color-jira-card: var(--jira-card);
   --color-jira-hairline: var(--jira-hairline);
+  --color-jira-hairline-hover: var(--jira-hairline-hover);
   --color-jira-on: var(--jira-on);
 
   /* Radius scale (DESIGN.md rounded tokens) */
@@ -305,6 +393,91 @@
    */
   --shadow-hairline: 0 1px 3px rgba(20, 20, 19, 0.08);
 
+  /* ------------------------------------------------------------------------ */
+  /* MOTION — see DESIGN.md > Interaction: Hover & Motion.                     */
+  /* ------------------------------------------------------------------------ */
+  /*
+   * One curve (ease-out-quart), three time bands: 150ms for state glides
+   * (hover / press / crossfades), 220ms for content arrival, 200ms/150ms for
+   * the dialog (exits run ~75% of entrances). Motion conveys state — feedback,
+   * reveal, arrival — never decoration; there is no page-load choreography.
+   *
+   * The two --default-transition-* tokens retune Tailwind's own transition-*
+   * utilities, so every `transition-colors` in the app shares this duration and
+   * curve with nothing extra at the call site. That is what makes the hover hue
+   * shifts read as ONE system.
+   *
+   * Every --animate-* value carries `both` deliberately: entrance rows sit in
+   * their from-state while a stagger delay runs (fill-mode backwards), and the
+   * dialog's exit holds its final frame until Radix unmounts it (forwards).
+   *
+   * prefers-reduced-motion: the block at the end of this file collapses every
+   * transform-carrying animation and transition to nothing. Colour glides stay
+   * — a colour change is not motion.
+   */
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Content arrival: detail-pane records, list/feed rows (staggered via
+     entranceDelay in lib/utils.ts, 20ms per row capped at 12), the grid. */
+  --animate-rise-in: rise-in 220ms cubic-bezier(0.25, 1, 0.5, 1) both;
+  /* Crossfade: tab panels, select menus — lateral moves, no rise. */
+  --animate-fade-in: fade-in 150ms cubic-bezier(0.25, 1, 0.5, 1) both;
+  --animate-fade-out: fade-out 150ms cubic-bezier(0.25, 1, 0.5, 1) both;
+  /* The dialog scales around its own centering transform — the translate is
+     baked into the keyframes because an animation overrides the utility
+     transform for its whole run, and losing the -50% centering mid-flight
+     teleports the panel. */
+  --animate-dialog-in: dialog-in 200ms cubic-bezier(0.25, 1, 0.5, 1) both;
+  --animate-dialog-out: dialog-out 150ms cubic-bezier(0.25, 1, 0.5, 1) both;
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  @keyframes dialog-out {
+    from {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.97);
+    }
+  }
+
   /* Font stacks — local system substitutes only, no external font links */
   --font-display: 'Tiempos Headline', 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
   --font-sans: 'StyreneB', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -344,5 +517,36 @@
     font-family: var(--font-display);
     font-weight: 400;
     color: var(--ink);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reduced motion — the law, not a nicety.                                     */
+/* -------------------------------------------------------------------------- */
+/*
+ * Everything that MOVES collapses to instant: entrances, the dialog's scale,
+ * crossfades (they gate content arrival, so they go too), the card arrow's
+ * nudge, the progress bar's width glide. Pure colour transitions stay — a
+ * hover hue shift is not motion and remains useful feedback.
+ *
+ * `animation: none` (not a 0.01ms duration) on the open/close pairs matters:
+ * Radix unmounts a closing dialog immediately when no animation is running,
+ * which is exactly the instant-close a reduced-motion user asked for.
+ *
+ * These rules are UNLAYERED on purpose: Tailwind's utilities live in
+ * @layer utilities, and unlayered CSS outranks every layer regardless of
+ * source order, so this block wins without !important.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise-in,
+  .animate-fade-in,
+  .animate-fade-out,
+  .animate-dialog-in,
+  .animate-dialog-out {
+    animation: none;
+  }
+  .transition-transform,
+  .transition-\[width\] {
+    transition: none;
   }
 }

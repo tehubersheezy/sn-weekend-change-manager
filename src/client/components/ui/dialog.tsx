@@ -19,7 +19,10 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn('fixed inset-0 z-50 bg-ink/40', className)}
+    className={cn(
+      'fixed inset-0 z-50 animate-fade-in bg-ink/40 data-[state=closed]:animate-fade-out',
+      className,
+    )}
     {...props}
   />
 ))
@@ -31,10 +34,16 @@ const DialogContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
+    {/* dialog-in/-out carry the -50% centering inside their keyframes — an
+        animation owns `transform` for its whole run, and without the baked-in
+        translate the panel would teleport out of center while scaling. Radix
+        holds the closing dialog mounted until dialog-out finishes (150ms, ~75%
+        of the 200ms open — exits are quicker than entrances). */}
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
         'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-background p-8 text-ink outline-none',
+        'animate-dialog-in data-[state=closed]:animate-dialog-out',
         className,
       )}
       {...props}
@@ -42,7 +51,7 @@ const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close
         className={cn(
-          'absolute right-5 top-5 rounded-sm text-muted-foreground disabled:pointer-events-none',
+          'absolute right-5 top-5 rounded-sm text-muted-foreground transition-colors hover:text-hover-ink disabled:pointer-events-none',
           FOCUS_RING,
         )}
       >

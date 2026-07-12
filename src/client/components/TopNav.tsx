@@ -102,9 +102,13 @@ export function TopNav({
             aria-current={screen === p.key ? 'page' : undefined}
             onClick={() => onScreenChange(p.key)}
             className={cn(
-              'rounded-md px-3.5 py-2 font-sans text-sm font-medium',
+              'rounded-md px-3.5 py-2 font-sans text-sm font-medium transition-colors',
               FOCUS_RING,
-              screen === p.key ? 'bg-surface-card text-ink' : 'text-muted-foreground',
+              // The current screen is home and doesn't warm; the others take
+              // the warm tier's peach wash on hover.
+              screen === p.key
+                ? 'bg-surface-card text-ink'
+                : 'text-muted-foreground hover:bg-hover-surface',
             )}
           >
             {p.label}

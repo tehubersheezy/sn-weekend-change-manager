@@ -20,8 +20,12 @@ import { cn } from '../../lib/utils'
  * last-wins merge. No leading-* here on purpose: the size token carries its own
  * line-height (13px/1.4 = {typography.caption}).
  */
+// transition-colors in the base is what makes a LIVE state change glide: when
+// an AMB refetch moves a change and StateBadge swaps variants on the same DOM
+// node, the pill's hue eases over instead of snapping — telemetry without a
+// toast. It also carries the group-hover deepening callers add to pill-buttons.
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full font-sans text-caption font-medium whitespace-nowrap',
+  'inline-flex items-center rounded-full font-sans text-caption font-medium whitespace-nowrap transition-colors',
   {
     variants: {
       variant: {

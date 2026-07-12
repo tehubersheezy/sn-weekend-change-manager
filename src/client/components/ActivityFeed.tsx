@@ -6,7 +6,7 @@ import type { ChangeRecord, TaskRecord } from '../types'
 import { display, value } from '../utils/fields'
 import { formatDay, formatTime } from '../utils/datetime'
 import { asStateField } from '../utils/stateLabels'
-import { cn } from '../lib/utils'
+import { cn, entranceDelay } from '../lib/utils'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Skeleton } from './ui/skeleton'
@@ -112,13 +112,17 @@ export function ActivityFeed({
   // an update touched; a bare key is the right density for that, and the summary
   // is one click away on the issue itself. The Jiras tab is the surface that
   // needs summaries, because there the issues ARE the content.
+  // `start` is the group's flat index across the whole feed — the entrance
+  // stagger runs feed-wide, not per-day, so day headers don't reset the rhythm.
   const days = useMemo(() => {
-    const groups: { day: string; items: FeedItem[] }[] = []
+    const groups: { day: string; items: FeedItem[]; start: number }[] = []
+    let count = 0
     for (const item of items) {
       const day = formatDay(item.event.when)
       const last = groups[groups.length - 1]
       if (last && last.day === day) last.items.push(item)
-      else groups.push({ day, items: [item] })
+      else groups.push({ day, items: [item], start: count })
+      count++
     }
     return groups
   }, [items])
@@ -167,9 +171,16 @@ export function ActivityFeed({
           {days.map((group) => (
             <section key={group.day} className="flex flex-col gap-1">
               <GroupLabel>{group.day}</GroupLabel>
+              {/* Rows keyed by event id, so a silent refetch keeps existing DOM
+                  and only a genuinely NEW event mounts — it rises in at the top
+                  with zero delay: the live arrival is the motion, no toast. */}
               <ol className="divide-y divide-hairline-soft">
-                {group.items.map((item) => (
-                  <li key={item.event.id}>
+                {group.items.map((item, j) => (
+                  <li
+                    key={item.event.id}
+                    className="animate-rise-in"
+                    style={entranceDelay(group.start + j)}
+                  >
                     <FeedRow item={item} onOpen={onOpen} onOpenJira={onOpenJira} />
                   </li>
                 ))}

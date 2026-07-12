@@ -61,3 +61,16 @@ export function cn(...inputs: ClassValue[]) {
  */
 export const FOCUS_RING =
   'outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+
+/**
+ * Entrance stagger for `animate-rise-in` rows: 20ms per row, capped at 12 rows
+ * so a 100-row Execute list settles in ~460ms total (240ms max delay + 220ms
+ * animation) instead of trailing entrances for two seconds. The animation
+ * token carries fill-mode `both`, so a delayed row holds its from-state
+ * (invisible) while it waits — without that, rows flash visible, vanish, then
+ * animate. Under prefers-reduced-motion the animation is `none` and the delay
+ * is inert.
+ */
+export function entranceDelay(index: number): { animationDelay: string } {
+  return { animationDelay: `${Math.min(index, 12) * 20}ms` }
+}

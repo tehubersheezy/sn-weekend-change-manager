@@ -26,7 +26,13 @@ export function ProgressBar({ done, total }: Progress) {
         {done}/{total} tasks done
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink/10">
-        <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
+        {/* The width glides when an AMB refetch moves the fraction — progress
+            is seen to advance rather than teleport. A 160px bar is cheap to
+            animate; theme.css zeroes this under prefers-reduced-motion. */}
+        <div
+          className="h-full rounded-full bg-ink transition-[width] duration-300"
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   )

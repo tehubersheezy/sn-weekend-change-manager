@@ -121,10 +121,30 @@ export function JiraPriorityFact({ priority }: { priority: string }) {
  *
  * tabular-nums, not a mono face: the issue number needs to align, and that is
  * what the sans face's numeric feature is for. There is no mono in this system.
+ *
+ * `interactive` (set by JiraLink, whose <button> is the `group`) adds the warm
+ * tier's foreign-record hover: the EDGE firms within the blue family —
+ * jira-hairline → jira-hairline-hover on hover, full jira-ink on press. The
+ * fill never moves: jira-ink on any usefully-deeper fill drops under 4.5:1
+ * (see theme.css), and warming toward coral would repaint provenance as
+ * emphasis. Display-only usages (a task row naming its key) take no hover —
+ * they are identifiers, not affordances.
  */
-export function JiraKeyChip({ issueKey }: { issueKey: string }) {
+export function JiraKeyChip({
+  issueKey,
+  interactive = false,
+}: {
+  issueKey: string
+  interactive?: boolean
+}) {
   return (
-    <span className="inline-flex items-center rounded-xs border border-jira-hairline bg-jira-card px-1.5 py-px font-sans text-caption font-medium tabular-nums text-jira-ink">
+    <span
+      className={cn(
+        'inline-flex items-center rounded-xs border border-jira-hairline bg-jira-card px-1.5 py-px font-sans text-caption font-medium tabular-nums text-jira-ink',
+        interactive &&
+          'transition-colors group-hover:border-jira-hairline-hover group-active:border-jira-ink',
+      )}
+    >
       {issueKey}
     </span>
   )

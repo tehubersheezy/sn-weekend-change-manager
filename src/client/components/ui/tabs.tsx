@@ -27,8 +27,11 @@ const TabsTrigger = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
+    // Hover (the peach wash) is scoped to INACTIVE triggers: the active tab is
+    // already home in surface-card and doesn't warm — hover marks a move you
+    // could make, not the place you are.
     className={cn(
-      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3.5 py-2 font-sans text-sm font-medium text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface-card data-[state=active]:text-ink',
+      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3.5 py-2 font-sans text-sm font-medium text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50 data-[state=inactive]:hover:bg-hover-surface data-[state=active]:bg-surface-card data-[state=active]:text-ink',
       FOCUS_RING,
       className,
     )}
@@ -43,7 +46,10 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn('mt-4', FOCUS_RING, className)}
+    // Crossfade, not rise: a tab switch is a lateral move between siblings, so
+    // the panel fades in place. (Radix unmounts inactive panels; the animation
+    // fires on mount.)
+    className={cn('mt-4 animate-fade-in', FOCUS_RING, className)}
     {...props}
   />
 ))

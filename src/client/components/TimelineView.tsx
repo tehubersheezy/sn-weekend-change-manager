@@ -161,10 +161,15 @@ export function TimelineView({
                 }}
                 onMouseMove={showTip(c)}
                 onMouseLeave={() => setTip(null)}
+                // The ROW takes the warm tier; the BAR does not. The bar fills
+                // are dataviz-validated against the cream canvas — a hue shift
+                // on hover would repaint the one channel that carries state.
                 className={cn(
-                  'flex h-10 cursor-pointer items-center rounded-md',
+                  'flex h-10 cursor-pointer items-center rounded-md transition-colors',
                   FOCUS_RING,
-                  selected && 'bg-surface-card',
+                  selected
+                    ? 'bg-surface-card'
+                    : 'hover:bg-hover-surface active:bg-surface-card',
                 )}
               >
                 <div className="w-56 shrink-0 truncate pr-4">

@@ -76,9 +76,11 @@ export function JiraList({
             title={`Open ${issue.key}`}
             onClick={() => onOpen(issue.key)}
             className={cn(
-              'flex w-full flex-col gap-1.5 p-5 text-left active:bg-surface-soft',
+              // Native chrome, native warm tier: peach wash on hover, cream-card
+              // press. Only the chip and stamp inside carry the blue.
+              'flex w-full flex-col gap-1.5 p-5 text-left transition-colors hover:bg-hover-surface active:bg-surface-card',
               // The row is a card-as-button; first and last need the card's radius
-              // back, or the press fill paints square corners over it.
+              // back, or the hover/press fills paint square corners over it.
               'first:rounded-t-lg last:rounded-b-lg',
               FOCUS_RING,
             )}

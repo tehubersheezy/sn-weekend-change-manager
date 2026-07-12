@@ -225,9 +225,14 @@ export function ChangeGridView({
                   type="button"
                   title={`Open ${display(t.number)} · ${display(t.state) || 'Unknown'}`}
                   onClick={() => onOpenTask(value(t.sys_id), sysId)}
-                  className={cn('rounded-full', FOCUS_RING)}
+                  className={cn('group rounded-full', FOCUS_RING)}
                 >
-                  <Badge variant="pill" size="sm" className="tabular-nums">
+                  {/* Filled cream clickable: hover deepens one ladder step. */}
+                  <Badge
+                    variant="pill"
+                    size="sm"
+                    className="tabular-nums group-hover:bg-surface-cream-strong"
+                  >
                     {display(t.number)}
                   </Badge>
                 </button>
@@ -454,7 +459,13 @@ export function ChangeGridView({
           </p>
         </CenteredState>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
+        // One entrance for the whole table, not per-row: a hundred <tr>s
+        // animating transform under a sticky header is paint risk for zero
+        // read benefit — the grid is a copy surface, not a feed. Rows here are
+        // NOT clickable (only the links and pills inside cells are), so they
+        // take no hover wash either: a row wash would fight the shift+drag
+        // selection paint.
+        <div className="min-h-0 flex-1 animate-rise-in overflow-auto rounded-lg border border-border">
           {/* border-separate (not collapse) so the sticky header keeps its own
               bottom hairline — collapsed borders scroll away with the rows. */}
           <table

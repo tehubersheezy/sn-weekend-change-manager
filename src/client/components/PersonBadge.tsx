@@ -29,9 +29,17 @@ export function PersonBadge({
       type="button"
       title={`Open ${name}`}
       onClick={onOpen}
-      className={cn('rounded-full text-left', FOCUS_RING, className)}
+      className={cn('group rounded-full text-left', FOCUS_RING, className)}
     >
-      <Badge variant="pill" size={size} className="gap-1">
+      {/* A filled cream clickable deepens ONE LADDER STEP on hover
+          (surface-card → surface-cream-strong): the fill is already cream, so
+          its warmth gain comes from the ladder, not the peach wash. The button
+          is the `group`; the badge carries transition-colors in its base. */}
+      <Badge
+        variant="pill"
+        size={size}
+        className="gap-1 group-hover:bg-surface-cream-strong"
+      >
         <User className="size-3 shrink-0 text-muted-soft" aria-hidden />
         {name}
       </Badge>

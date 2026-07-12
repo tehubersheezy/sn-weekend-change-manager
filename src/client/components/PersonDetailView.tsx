@@ -126,7 +126,12 @@ export function PersonDetailView({
           </p>
         </CenteredState>
       ) : (
-        <>
+        // Content arrival. Keyed by personId: this page renders straight from
+        // props (no loading flip to remount it), so navigating person → person
+        // — a task's assignee from another person's task list — replays the
+        // rise by remounting this block. The AMB-fed arrays refresh props
+        // without touching the key, so live updates stay quiet.
+        <div key={personId} className="flex animate-rise-in flex-col gap-8">
           <header className="flex flex-col gap-2">
             <div className="font-sans text-caption text-muted-foreground">Person</div>
             {name ? (
@@ -174,7 +179,7 @@ export function PersonDetailView({
               />
             )}
           </section>
-        </>
+        </div>
       )}
     </div>
   )
