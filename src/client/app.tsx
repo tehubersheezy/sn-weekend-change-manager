@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChangeService } from './services/ChangeService'
 import { ActivityService } from './services/ActivityService'
+import { JiraService } from './services/JiraService'
 import { useAmbClient } from './hooks/useAmb'
 import { useWeekendChanges } from './hooks/useWeekendChanges'
 import { useActivityFeed } from './hooks/useActivityFeed'
@@ -32,7 +33,7 @@ import { PlanList } from './components/PlanList'
 import { ExecuteList } from './components/ExecuteList'
 import { ReviewList } from './components/ReviewList'
 import { TimelineView } from './components/TimelineView'
-import { ChangeDetailView } from './components/ChangeDetailView'
+import { ChangeDetailView, type DetailTab } from './components/ChangeDetailView'
 import { ActivityFeed } from './components/ActivityFeed'
 import { runDiagnostics } from './utils/diag'
 
@@ -103,6 +104,10 @@ export default function App() {
   })
   const [refreshKey, setRefreshKey] = useState(0)
   const [changeNumber, setChangeNumber] = useState<string | undefined>(undefined)
+  // Which detail tab an opened change lands on. Owned here, not in the detail
+  // view: a feed row's task number must reach the Change tasks tab even when
+  // that change is already the one on screen (no sysId change to react to).
+  const [detailTab, setDetailTab] = useState<DetailTab>('details')
   const [filter, setFilter] = useState('all')
   const [view, setView] = useState<'list' | 'timeline'>('list')
   const [groupFilter, setGroupFilter] = useState('all')
@@ -127,6 +132,9 @@ export default function App() {
   const activityService = useMemo(() => new ActivityService(), [])
   const feed = useActivityFeed(activityService, changes, tasks, !loading && !error)
 
+  // Shared by the feed and the detail pane's Jiras tab so a key is resolved once.
+  const jiraService = useMemo(() => new JiraService(), [])
+
   const updateWindowConfig = useCallback((next: WindowConfig) => {
     setWindowConfig(next)
     try {
@@ -139,6 +147,8 @@ export default function App() {
   useEffect(() => {
     const onPop = () => {
       const fromUrl = urlState()
+      // The tab isn't in the URL, so a restored change lands on its first tab.
+      setDetailTab('details')
       setNav((prev) => ({ screen: fromUrl.screen ?? prev.screen, selectedId: fromUrl.id }))
     }
     window.addEventListener('popstate', onPop)
@@ -167,9 +177,11 @@ export default function App() {
     [selectedId],
   )
 
+  /** Open a change, optionally straight onto one of the detail pane's tabs. */
   const selectChange = useCallback(
-    (id: string) => {
+    (id: string, tab: DetailTab = 'details') => {
       setChangeNumber(undefined) // clear until the new record loads
+      setDetailTab(tab)
       pushUrl(screen, id, titleFor())
       setNav((prev) => ({ ...prev, selectedId: id }))
     },
@@ -336,9 +348,12 @@ export default function App() {
           {selectedId ? (
             <ChangeDetailView
               service={service}
+              jiraService={jiraService}
               amb={amb}
               sysId={selectedId}
               refreshKey={refreshKey}
+              tab={detailTab}
+              onTabChange={setDetailTab}
               onLoaded={setChangeNumber}
               onBack={clearSelection}
             />
@@ -349,6 +364,7 @@ export default function App() {
               error={feed.error}
               changes={changes}
               tasks={tasks}
+              jiraService={jiraService}
               onOpen={selectChange}
             />
           )}

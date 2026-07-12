@@ -1,6 +1,7 @@
 import type { TaskRecord } from '../types'
 import { display, value } from '../utils/fields'
 import { Card } from './ui/card'
+import { JiraLink } from './InlineLink'
 import { TaskStateBadge } from './StateBadge'
 
 /** One distinct Jira key plus the change task(s) carrying it. */
@@ -27,10 +28,19 @@ export function jiraIssuesFromTasks(tasks: TaskRecord[]): JiraIssue[] {
 }
 
 /**
- * Jira issues stacked inside a single card, hairline-divided. Display-only:
- * correlation_id is empty on this instance, so there is no issue URL to link.
+ * Jira issues stacked inside a single card, hairline-divided. Keys link out to
+ * Jira when `links` has a URL for them — the scripted REST API resolves those
+ * server-side from the jira_base_url property, and an unconfigured instance
+ * leaves the key as plain text rather than a dead href.
  */
-export function JiraList({ issues }: { issues: JiraIssue[] }) {
+export function JiraList({
+  issues,
+  links,
+}: {
+  issues: JiraIssue[]
+  /** Jira key → browse URL, from useJiraLinks. */
+  links: Map<string, string>
+}) {
   if (issues.length === 0) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
@@ -43,7 +53,9 @@ export function JiraList({ issues }: { issues: JiraIssue[] }) {
       {issues.map((issue) => (
         <div key={issue.key} className="flex items-start justify-between gap-4 p-5">
           <div className="min-w-0">
-            <div className="text-sm font-medium text-ink">{issue.key}</div>
+            <div className="text-sm">
+              <JiraLink issueKey={issue.key} url={links.get(issue.key)} />
+            </div>
             <div className="mt-1 flex flex-col gap-1">
               {issue.tasks.map((t) => (
                 <div key={value(t.sys_id)} className="text-[13px] text-muted-soft">

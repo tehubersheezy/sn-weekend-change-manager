@@ -8,3 +8,5 @@ target/
 src/client/styles/tailwind.generated.css
 .playwright-mcp/
 .impeccable/
+scratchpad/
+.claude/settings.local.json

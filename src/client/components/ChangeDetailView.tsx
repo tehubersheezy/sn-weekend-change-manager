@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import type { AffectedCiRecord, ChangeRecord, TaskRecord } from '../types'
 import type { ChangeService } from '../services/ChangeService'
+import type { JiraService } from '../services/JiraService'
 import type { SnowAmb } from '../services/SnowAmb'
 import { useRecordWatch } from '../hooks/useAmb'
+import { useJiraLinks } from '../hooks/useJiraLinks'
 import { display, value } from '../utils/fields'
 import { formatDateTime, parseSnDate } from '../utils/datetime'
 import { Badge } from './ui/badge'
@@ -17,18 +19,32 @@ import { TaskList } from './TaskList'
 import { CiList } from './CiList'
 import { JiraList, jiraIssuesFromTasks } from './JiraList'
 
+/** The detail pane's tabs. Callers open a change straight onto one of these. */
+export type DetailTab = 'details' | 'tasks' | 'cis' | 'jiras'
+
 export function ChangeDetailView({
   service,
+  jiraService,
   amb,
   sysId,
   refreshKey,
+  tab,
+  onTabChange,
   onLoaded,
   onBack,
 }: {
   service: ChangeService
+  jiraService: JiraService
   amb: SnowAmb
   sysId: string
   refreshKey: number
+  /**
+   * Controlled by the shell, not held here: opening a change from a feed row's
+   * task number has to land on the Change tasks tab even when that change is
+   * already the one on screen (no sysId change to react to).
+   */
+  tab: DetailTab
+  onTabChange: (tab: DetailTab) => void
   onLoaded?: (changeNumber: string) => void
   /** Return to the pane's resting view (the weekend activity feed). */
   onBack?: () => void
@@ -38,12 +54,6 @@ export function ChangeDetailView({
   const [cis, setCis] = useState<AffectedCiRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState('details')
-
-  // Opening a different change resets the pane to its first tab.
-  useEffect(() => {
-    setTab('details')
-  }, [sysId])
 
   // silent=true refetches in place (live AMB updates) without the skeleton flash.
   const load = useCallback(
@@ -82,8 +92,11 @@ export function ChangeDetailView({
   useRecordWatch(amb, 'change_task', `change_request=${sysId}`, liveRefresh)
   useRecordWatch(amb, 'task_ci', `task=${sysId}`, liveRefresh)
 
-  // Jira issues ride on the change tasks (correlation_display holds the key).
+  // Jira issues ride on the change tasks (correlation_display holds the key);
+  // the scripted REST API turns those keys into links, if Jira is configured.
   const jiras = useMemo(() => jiraIssuesFromTasks(tasks), [tasks])
+  const jiraKeys = useMemo(() => jiras.map((j) => j.key), [jiras])
+  const jiraLinks = useJiraLinks(jiraService, jiraKeys)
 
   const start = change && parseSnDate(value(change.start_date))
   const end = change && parseSnDate(value(change.end_date))
@@ -147,7 +160,7 @@ export function ChangeDetailView({
             </div>
           </header>
 
-          <Tabs value={tab} onValueChange={setTab}>
+          <Tabs value={tab} onValueChange={(next) => onTabChange(next as DetailTab)}>
             <TabsList className="flex-wrap">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="tasks" className="gap-1.5">
@@ -206,7 +219,7 @@ export function ChangeDetailView({
             </TabsContent>
 
             <TabsContent value="jiras">
-              <JiraList issues={jiras} />
+              <JiraList issues={jiras} links={jiraLinks} />
             </TabsContent>
           </Tabs>
         </>

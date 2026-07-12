@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r \"getpath([\\\"tool_input\\\",\\\"file_path\\\"]) // empty\"); case \"$f\" in *src/client/*.ts|*src/client/*.tsx) cd \"${CLAUDE_PROJECT_DIR:-.}\"; out=$(npx tsc --noEmit -p src/client/tsconfig.json 2>&1); if [ $? -ne 0 ]; then printf \"Typecheck failed after editing %s:\\n%s\\n\" \"$f\" \"$out\" >&2; exit 2; fi ;; *) : ;; esac",
+            "timeout": 120,
+            "statusMessage": "Typechecking src/client…"
+          }
+        ]
+      }
+    ]
+  }
+}
