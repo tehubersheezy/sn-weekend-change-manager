@@ -1,5 +1,5 @@
-import { ExternalLink } from 'lucide-react'
 import { cn, FOCUS_RING } from '../lib/utils'
+import { JiraKeyChip } from './JiraBadges'
 
 /**
  * Inline links that sit inside running text (feed meta lines, list rows).
@@ -39,24 +39,43 @@ export function RecordLink({
 }
 
 /**
- * A Jira issue key. Links out when the instance has a Jira base URL configured
- * (resolved server-side via the scoped scripted REST API); otherwise the key
- * still shows, just as text — a bare key beats a dead href.
+ * A Jira issue key named inside a native (ServiceNow) surface — a feed meta line,
+ * a list row. THE BOUNDARY OBJECT.
+ *
+ * This used to be an <a target="_blank"> onto a Jira browse URL: the console knew
+ * a key existed and then handed you off to another product. It doesn't anymore —
+ * the key opens the console's own Jira issue view, served by the app's scoped
+ * REST API. An anchor that leaves and a button that navigates in-app are
+ * different promises, and this is the button.
+ *
+ * The chip carries the provenance tint even out here on the cream, and that does
+ * NOT break "blue is a ground, never an accent" (DESIGN.md > Foreign Records).
+ * The blue is not making the key stand out; it is saying where the key LIVES.
+ * The proof is that it buys no emphasis: the chip sits in a muted meta line
+ * beside the change and task numbers, and reads as their peer, not their superior.
+ *
+ * It brings its own border because it crosses a boundary — {colors.jira-card} as
+ * a bare fill on a selected surface-card row measures 1.007:1 and vanishes.
+ *
+ * Focus keeps the NATIVE recipe: this button sits on cream, and the ring's offset
+ * is always the colour of the surface the element is on. Only the Jira pane itself
+ * flips that offset to {colors.jira-canvas}.
  */
-export function JiraLink({ issueKey, url }: { issueKey: string; url?: string }) {
-  if (!url) {
-    return <span className="font-medium text-ink">{issueKey}</span>
-  }
+export function JiraLink({
+  issueKey,
+  onOpen,
+}: {
+  issueKey: string
+  onOpen: (key: string) => void
+}) {
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={`Open ${issueKey} in Jira`}
-      className={cn(INLINE_LINK, 'inline-flex items-center gap-1')}
+    <button
+      type="button"
+      title={`Open ${issueKey}`}
+      onClick={() => onOpen(issueKey)}
+      className={cn('rounded-xs align-baseline', FOCUS_RING)}
     >
-      {issueKey}
-      <ExternalLink className="size-3 text-muted-soft" aria-hidden />
-    </a>
+      <JiraKeyChip issueKey={issueKey} />
+    </button>
   )
 }

@@ -43,6 +43,24 @@ colors:
   teal-ink: "#0b6e5a"
   amber-ink: "#8f4a15"
 
+  # FOREIGN RECORDS. The one blue in the system, and the only hue admitted since
+  # the extraction. It does not mean accent, link, info or done. It means exactly
+  # one thing: this record does not live in ServiceNow. Blue is PAPER, not INK.
+  # The Don'ts still forbid cool blue as a brand accent — provenance is not an
+  # accent. See Foreign Records for the derivation, the boundary rules and the
+  # numbers.
+  #
+  # Note the family breaks the fill/ink pattern: it has ONLY an ink. WCAG luminance
+  # is 71% green / 21% red / 7% blue, so a blue at coral's exact perceptual
+  # lightness measures 2.96:1 where coral measures 3.11:1 — under the 3:1 shape
+  # floor. A blue that clears 3:1 is darker than every other fill here, which
+  # collapses it into its own ink step. One chromatic token is all that can pass.
+  jira-ink: "#3465a5"
+  jira-canvas: "#f2f8ff"
+  jira-card: "#deeafb"
+  jira-hairline: "#c3d7f2"
+  jira-on: "#f2f8ff"
+
 typography:
   display-xl:
     fontFamily: "Copernicus, Tiempos Headline, serif"
@@ -308,11 +326,90 @@ components:
     typography: "{typography.caption}"
     rounded: "{rounded.pill}"
     padding: 4px 12px
+  # The offset colour is the SURFACE THE ELEMENT SITS ON — not always the canvas.
+  # Canvas was simply the only surface the marketing site had. On a foreign-record
+  # pane the offset is {colors.jira-canvas}; a cream offset there is a visible cream
+  # halo. See Focus State.
   focus-ring:
     borderColor: "{colors.primary}"
     borderWidth: 2px
     offset: 2px
-    offsetColor: "{colors.canvas}"
+    offsetColor: "{colors.canvas} | {colors.jira-canvas} — whichever surface the element is on"
+
+  # --- Foreign records (Jira). See Foreign Records. -------------------------
+  # The pane floor. The tint IS the provenance statement; nothing else on the
+  # surface needs to shout. Never used for a native record.
+  jira-surface:
+    backgroundColor: "{colors.jira-canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
+    padding: "{spacing.xl}"
+  # The boundary object: a Jira key rendered inside a NATIVE surface (a feed line,
+  # a Jiras-tab row). Tight padding — it is an identifier, not a badge. It always
+  # carries its own border: an object that crosses a boundary brings its own edge.
+  # (On a selected surface-card row the fill alone measures 1.007:1 and vanishes.)
+  jira-key-chip:
+    backgroundColor: "{colors.jira-card}"
+    borderColor: "{colors.jira-hairline}"
+    borderWidth: 1px
+    textColor: "{colors.jira-ink}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.xs}"
+    padding: 1px 6px
+    fontFeature: tabular-nums
+  # Jira status category. ServiceNow badges are PILLS; Jira badges are STAMPS
+  # ({rounded.xs}). One hue, three ink densities — hollow -> tinted -> solid. The
+  # ladder is lightness, not hue, so it survives CVD and greyscale. A Jira "Done"
+  # (solid blue square) cannot be mistaken for a ServiceNow "Closed" (tinted green
+  # pill): shape, hue and fill density all differ.
+  jira-stamp-todo:
+    backgroundColor: transparent
+    borderColor: "{colors.jira-hairline}"
+    borderWidth: 1px
+    textColor: "{colors.jira-ink}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.xs}"
+    padding: 4px 12px
+  jira-stamp-progress:
+    backgroundColor: "{colors.jira-card}"
+    textColor: "{colors.jira-ink}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.xs}"
+    padding: 4px 12px
+  jira-stamp-done:
+    backgroundColor: "{colors.jira-ink}"
+    textColor: "{colors.jira-on}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.xs}"
+    padding: 4px 12px
+  # Issue type and priority. NO chrome — a glyph in the Jira hue, a word in the
+  # console's ink. There is exactly one stamp per issue (its status), so the stamp
+  # stays a rare, meaningful mark instead of becoming badge soup.
+  jira-fact:
+    backgroundColor: transparent
+    iconColor: "{colors.jira-ink}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-sm}"
+  # The quiet reference panel on a Jira pane — description, and any long body text.
+  # {component.plan-card}'s register, one family over. Never a <pre>.
+  jira-panel:
+    backgroundColor: "{colors.jira-card}"
+    textColor: "{colors.body-text}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.lg}"
+    padding: 20px
+  # THE HERO, and the reason the surface exists: the changes and change tasks in
+  # THIS console that carry this key. The one CREAM object on the blue pane — a
+  # window back into ServiceNow. It needs no decoration to lead: it is the only
+  # warm thing on a cool page. Colour-block hierarchy, exactly as the system says.
+  # Its rows are native records and take native {component.badge-status} PILLS.
+  jira-referenced-by-card:
+    backgroundColor: "{colors.canvas}"
+    borderColor: "{colors.hairline}"
+    borderWidth: 1px
+    textColor: "{colors.ink}"
+    typography: "{typography.display-xs}"
+    rounded: "{rounded.lg}"
   cta-band-coral:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
@@ -341,7 +438,7 @@ Brand voltage comes from the **cream + coral pairing** — coral (`{colors.prima
 The system has three surface modes that alternate page-by-page:
 1. **Cream canvas** (`{colors.canvas}`) — default body floor
 2. **Light cream cards** (`{colors.surface-card}`) — feature card backgrounds
-3. **Dark navy product surfaces** (`{colors.surface-dark}`) — code editor mockups, model showcase cards, pre-footer CTAs, footer itself
+3. **Dark product surfaces** (`{colors.surface-dark}`) — code editor mockups, model showcase cards, pre-footer CTAs, footer itself. (The extraction calls these "navy"; the hex is a *warm charcoal*. See Colors > Surface.)
 
 The dark surfaces are where Claude shows its product chrome — code blocks, terminal output, model comparison tables, agentic-flow diagrams. The cream-to-dark contrast is the page's pacing rhythm.
 
@@ -370,7 +467,7 @@ The dark surfaces are where Claude shows its product chrome — code blocks, ter
 - **Surface Soft** (`{colors.surface-soft}` — #f5f0e8): Section dividers, very-soft band backgrounds.
 - **Surface Card** (`{colors.surface-card}` — #efe9de): Feature cards, content cards. One step darker than canvas.
 - **Surface Cream Strong** (`{colors.surface-cream-strong}` — #e8e0d2): A strongest-cream variant used on selected category tabs and emphasized section bands.
-- **Surface Dark** (`{colors.surface-dark}` — #181715): Code editor mockups, model showcase cards, footer. The dominant dark surface.
+- **Surface Dark** (`{colors.surface-dark}` — #181715): Code editor mockups, model showcase cards, footer. The dominant dark surface. **It is not navy.** This doc calls it "dark navy" in eight places, inherited verbatim from the claude.com extraction; the hex measures OKLCH **H 85, C 0.004** — a *warm, near-neutral charcoal*, the ink colour with the lights off. There is no blue in it and there never was. The remaining "navy" mentions describe marketing surfaces this console does not build (hero illustrations, footer, code windows) and are left as extraction history — but do not reach for a blue-black on their authority. **The system's genuinely cool tones are exactly one family wide, and it is `{colors.jira-ink}` — see Foreign Records.**
 - **Surface Dark Elevated** (`{colors.surface-dark-elevated}` — #252320): Elevated cards inside dark bands (settings panels in mockups).
 - **Surface Dark Soft** (`{colors.surface-dark-soft}` — #1f1e1b): Slightly lighter dark, used for code block backgrounds inside larger dark cards.
 - **Hairline** (`{colors.hairline}` — #e6dfd8): The 1px border tone on cream surfaces. Same hex as `{colors.primary-disabled}` — borders feel like one elevation step rather than ink lines.
@@ -410,6 +507,8 @@ The selected-row case is the tighter one — a tinted pill sitting on an already
 **The rule generalizes: the light hue is the colour as a FILL or a SHAPE; the `-ink` step is the colour as TYPE — on any surface, not only on its own tint.** A status dot, a chart bar, a 1px rule or a button fill takes the light hue. A word takes the `-ink`. An error message on the bare cream canvas is still type, so it is `{colors.error-ink}`, not `{colors.error}` — even though `{colors.error}` happens to scrape 4.6:1 there. Consistency of *rule* beats a per-case contrast audit, and it means nobody has to relitigate this at each call site.
 
 **Coral obeys the same split.** `{colors.primary}` is a fill — it measures **3.1:1** on cream, which is fine behind white button type and an AA failure as type itself. So the extraction's `{component.text-link}` (an inline coral link) is not usable as written: coral *type* takes `{colors.primary-ink}` (#a9583e, 4.8:1). It carries the same hex as `{colors.primary-active}` deliberately, and is named for its role — a reader should not have to wonder why a link at rest is painted in the press colour.
+
+**One hue has no fill, and the exception teaches the rule.** `{colors.jira-ink}` (foreign records) ships *only* as an ink. WCAG relative luminance is 71% green / 21% red / 7% blue, so a blue reads far darker to the formula than it looks to the eye: a blue at coral's exact perceptual lightness measures **2.96:1** on cream where coral measures **3.11:1** — below the 3:1 floor that makes a light hue usable as a shape at all. Clearing 3:1 forces a blue *darker than every fill in this palette*, which lands it on top of its own ink step. So the fill/ink split isn't a law of the system; it is a law of hues bright enough to have two usable steps, and blues are not. Any future cool hue will hit the same wall — check the 3:1 floor **before** assuming you get a fill. See Foreign Records.
 
 The timeline's bar palette is separately dataviz-validated (see `TimelineView.tsx`) — those bars are shapes, and their hexes are not `-ink` steps. Do not swap them without re-running the validator.
 
@@ -581,14 +680,26 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 
 ### Focus State
 
-**`focus-ring`** — A 2px ring in full-strength `{colors.primary}` (coral), held 2px off the element in `{colors.canvas}`. One recipe, every interactive element: buttons, tabs, cards-as-buttons, inline links, dialog close. This is the console's only focus treatment.
+**`focus-ring`** — A 2px ring in full-strength `{colors.primary}` (coral), held 2px off the element **in the colour of the surface the element sits on**. One recipe, every interactive element: buttons, tabs, cards-as-buttons, inline links, dialog close. This is the console's only focus treatment.
 
 The system's rule is "never document hover; default and active/pressed only" — focus is neither, and it is not a style choice. Cards in this console are `<button>`s and the interface is stated to be keyboard-operable, so the indicator is a hard requirement (WCAG 2.4.11 wants ≥ 3:1 against what's adjacent). Full-strength coral on cream is **3.11:1** and clears it.
 
-Two things the ring must not be:
+**The offset colour is a variable, not a constant.** This doc used to pin it to `{colors.canvas}`, and that was only ever true because canvas was the sole surface a marketing page had. The rule is: *the offset takes the colour of whatever the element is sitting on.* Get it wrong and the ring floats on a 2px band of the wrong colour — on `{component.jira-surface}` a cream offset is a visible cream halo on blue paper. Because the offset band and the surface outside the ring are then the same colour, the only contrast that ever matters is **coral against the surface the element sits on**:
+
+| Element sits on | Coral ring | |
+|---|---|---|
+| `{colors.canvas}` | **3.11:1** | ✅ |
+| `{colors.jira-canvas}` | **3.07:1** | ✅ |
+| `{colors.surface-card}` | **2.71:1** | ❌ |
+| `{colors.jira-card}` | **2.69:1** | ❌ |
+
+The two failures give a rule with teeth: **nothing focusable sits directly on a `*-card` fill.** Focusable objects live on a canvas — `{colors.canvas}` or `{colors.jira-canvas}`. (An active tab is *filled* `{colors.surface-card}` but *sits on* the canvas, so its offset band and its surroundings are both cream and it measures the full 3.11:1. That is the distinction, and it is why the tabs are fine.)
+
+Three things the ring must not be:
 
 - **Not the 15%-alpha coral halo alone.** That halo is **1.16:1** on the cream canvas — literally invisible. It reads as a focus state in `{component.text-input-focused}` only because a *coral border* sits inside it doing the actual work. Every element with no border to flip — a button, a tab, a card, a link — that copied the halo got a focus state you cannot see. This is the single easiest mistake to make in this system.
-- **Not offset-less on coral.** A coral ring drawn flush against a coral `{component.button-primary}` is 1.00:1 — it dissolves into the fill. The 2px canvas-colored offset is what separates them, and it restores the full 3.11:1.
+- **Not offset-less on coral.** A coral ring drawn flush against a coral `{component.button-primary}` is 1.00:1 — it dissolves into the fill. The 2px surface-coloured offset is what separates them, and it restores the full 3.11:1.
+- **Not re-tinted to match the surface it lands on.** A *blue* ring on a Jira pane is the tempting mistake, and it is wrong on the merits: focus is the **console's cursor**, not a property of the record under it. A reader tabbing across the ServiceNow/Jira boundary must not have the affordance change under them. The ring is chrome, and chrome stays coral everywhere. Only the offset moves.
 
 ### Tags / Badges
 
@@ -610,6 +721,127 @@ Two things the ring must not be:
 
 **`footer`** — Dark navy footer that closes every page. Background `{colors.surface-dark}` (#181715), text `{colors.on-dark-soft}`. 4-column link list at desktop covering Product / Company / Resources / Legal. Vertical padding 64px. The Anthropic spike-mark + "Anthropic" wordmark sits at the top in `{colors.on-dark}`. The footer never inverts.
 
+## Foreign Records
+
+*An amendment. It admits the system's first new hue since the extraction, and a blue at that — which the Don'ts forbid by name. Read the whole section before using it, and before extending it.*
+
+### The problem
+
+The console shows records that do not live in ServiceNow. A Jira issue is served through our own scoped REST route and rendered as a first-class surface inside the app — but it is not our record. Nothing in the system encodes that. Lifecycle state has a colour, risk has a badge, ownership has a name; **provenance has nothing.** A reader looking at a rendered issue has no way to know that the fields in front of them are a copy of something we do not own, cannot change, and did not author.
+
+That is a genuine, missing semantic — not a decoration problem. It earns its own layer.
+
+### The thesis: blue is paper, not ink
+
+**The console is a publication. A foreign record is a facsimile — the same publication, printed on different stock.**
+
+Everything that is the console's *voice* stays the console's: the Copernicus serif headline, the whole type scale, the sans body, the coral focus ring, the coral primary button, the record links, the semantic status pills on native records. Everything that is the record's *origin* is carried by one thing and one thing only: **the colour of the paper.**
+
+This gives the rule its edge, and the edge is what makes it enforceable:
+
+> **Blue is a GROUND, never an ACCENT. The moment blue is used to make something stand out, the rule has been broken.**
+
+So `{colors.jira-ink}` may paint a Jira key, a stamp label, a type glyph. It may never paint a link, a button, a chart series, an emphasis, a "Done", an "info" callout, or anything at all on a native record. It is not in the accent vocabulary. It is not available. DESIGN.md's *"Don't use cool blue or saturated cyan as a brand accent — the coral is the brand voltage"* **stands, unamended.** Provenance is not an accent. The coral is still the only voltage this system has.
+
+### The derivation: why *this* blue
+
+Two traps, and the palette itself points the way out of both.
+
+**The trap.** Atlassian's own blue is `#0052CC` (OKLCH C 0.201); the generic SaaS blue is `#2563EB` (C 0.215). Nothing in this palette exceeds **C 0.165** (`{colors.error}`, the loudest thing we own) and the mean is 0.12. Jira's blue carries **1.2–1.3× the chroma of the most saturated colour in the entire system.** Dropped on `{colors.canvas}` it does not read as "Jira" — it reads as a *different, cheaper website*, which is PRODUCT.md's "generic SaaS admin" anti-reference arriving through the front door.
+
+**The gap.** Every surface in this system is warm (`{colors.canvas}` H 95, `{colors.surface-card}` H 83, `{colors.hairline}` H 68) and every accent hue lives in H 24–179 — coral 39, amber 67, warning 83, success 149, teal 179, error 24. **The palette occupies barely half the hue wheel. The entire cool half is empty.** A blue displaces nothing.
+
+**The corridor.** The canvas is H 95, so its true complement is H 275 — which is violet, and Iteration Guide #6 forbids purple. Rotating the other way, the blue turns cyan by H 235, which the Don'ts forbid by name. **H 250–265 is the whole legal corridor**, bracketed by the system's own prohibitions. `{colors.jira-ink}` sits at **H 256** — 161° from the canvas, as cool as this system can legally go — and holds **C 0.115**, squarely inside the palette's own band. It takes its foreignness from *hue opposition*, not from saturation. An ink-blue, not a button-blue.
+
+**The dividend.** The six existing hues all sit in the red-green-yellow arc — precisely the arc that colour-vision deficiency compresses. Under deuteranopia the palette's worst existing pair (coral/success) separates by ΔE 0.049; `{colors.jira-ink}`'s *closest* neighbour separates by **ΔE 0.124**, over twice as far. **Blue is the one hue that adds categorical separation this palette cannot already make.**
+
+### The family has no light step, and that is not an oversight
+
+Every other hue here is a FILL with an `-ink` step beneath it. The Jira family is **one chromatic token**. The reason is arithmetic, and it will bite anyone who tries to "complete" the family:
+
+**WCAG relative luminance is 71% green, 21% red, 7% blue.** A blue therefore measures far darker than its perceptual lightness suggests. A blue at coral's *exact* OKLCH lightness (L 0.66) lands at **2.96:1** on cream where coral lands at **3.11:1** — it misses the 3:1 floor for shapes and glyphs. To clear 3:1, a blue has to be perceptually darker than every other fill in the system, which walks it straight into its own ink step. **There is no room for two.** `{colors.jira-ink}` (#3465a5) is the type colour, the glyph colour and the one solid fill, all three.
+
+Where the other families reach for a light hue, this one reaches for a **surface**: the tinted stamp is filled with `{colors.jira-card}`, exactly as `{component.badge-pill}` is filled with `{colors.surface-card}`.
+
+**Every Jira fill is opaque — no `/15` alphas.** The semantic pills only ever land on two surfaces, so alpha was safe for them. A Jira stamp lands on cream, on `{colors.jira-canvas}` *and* on `{colors.jira-card}`; an alpha would compound into three different rendered fills to audit. Opaque is one.
+
+### The numbers
+
+Measured against every surface a Jira object can land on. Type gate 4.5:1; shape and focus gate 3:1.
+
+| Token | Hex | Role | on `canvas` | on `surface-card` | on `jira-canvas` | on `jira-card` |
+|---|---|---|---|---|---|---|
+| `{colors.jira-ink}` | #3465a5 | type · shape · the one solid fill | **5.61** ✅ | **4.89** ✅ | **5.53** ✅ | **4.86** ✅ |
+| `{colors.jira-canvas}` | #f2f8ff | the pane floor | 1.015 | — | — | — |
+| `{colors.jira-card}` | #deeafb | card / stamp / chip fill | 1.154 | **1.007** ⚠ | 1.138 | — |
+| `{colors.jira-hairline}` | #c3d7f2 | edges | 1.392 | 1.213 | 1.372 | 1.206 |
+| `{colors.jira-on}` | #f2f8ff | type on a `jira-ink` fill | — | — | — | — |
+
+`{colors.jira-on}` on a `{colors.jira-ink}` fill — the solid "Done" stamp — measures **5.53:1**. For scale: white on `{colors.primary}` is **3.28:1**. *The Done stamp is the most legible badge in this application.*
+
+⚠ `{colors.jira-card}` is invisible as a **fill** on a selected `{colors.surface-card}` row (1.007:1). That is exactly why `{component.jira-key-chip}` always carries a `{colors.jira-hairline}` border: **an object that crosses a boundary brings its own edge.** Stamps that stay home on the Jira pane don't need one.
+
+### Why the pane tint is a whisper
+
+`{colors.jira-canvas}` is **1.015:1** against cream. That is not timidity — it is the ceiling, and the coral focus ring set it.
+
+The ring must clear 3:1 against whatever surface it floats on. Coral on cream is already only **3.11:1**. Solving for the darkest surface that still clears 3.0 leaves **3.7% of luminance headroom below the canvas.** A darker "blue panel" would have killed the focus ring on every button, tab and link on the surface. The constraint made the design better: the tint gets its signal from **hue**, not lightness — cream is R−B = **+5**, `{colors.jira-canvas}` is R−B = **−13**. The warm/cool axis *flips sign*. That is the difference between warm-white and cool-white paper stock, which nobody has trouble telling apart **when the two are adjacent** — and the console is a 50/50 split, so the Jira pane is *always* beside a cream one.
+
+The tint is never asked to work alone. Per PRODUCT.md — *identity is never colour-alone* — the surface also says "Jira" in words, in the header, next to the key.
+
+### Boundary rules
+
+**Blue is allowed:**
+- As the floor of a foreign-record surface (`{component.jira-surface}`).
+- On cards, panels, stamps and hairlines *within* that surface.
+- On `{component.jira-key-chip}` — a Jira key, anywhere, including inside native surfaces.
+
+**Blue is forbidden:**
+- On any native record's chrome — a change, a task, a CI, the list pane, the nav, the timeline, the activity feed's own furniture.
+- As a link colour. Links are `{colors.primary-ink}` **on the Jira surface too.** Two link colours is one too many.
+- As a button. Buttons are coral, on every surface. The Jira pane has no blue button.
+- As a status, severity or semantic colour. Blue does not mean "done", "info" or "in progress" — it means "foreign".
+- As a chart series. That is the dataviz palette's job.
+- As an error colour on the Jira surface. A failed fetch is the **console** failing, not a property of the record: it stays `{colors.error-ink}`. Console voice, console colour.
+
+**The hard case — a Jira key inside a native surface.** A key rides on `change_task.correlation_display` and shows up in the activity feed and in the change's Jiras tab, surrounded by cream and native pills. It reads as `{component.jira-key-chip}`: a small bounded chip, `{rounded.xs}`, tight padding, `{colors.jira-card}` fill, `{colors.jira-hairline}` border, `{colors.jira-ink}` label, `tabular-nums`.
+
+The chip does not break the "blue is a ground" rule — it *is* the rule at another scale. **The chip is a one-inch square of the foreign paper, embedded in ours.** Its blue is the ground *under* the key, and the key's ink is that paper's ink. It is bounded, so the blue never bleeds into the chrome around it; the surrounding row stays entirely native. A Jira key is not a word in the console's sentence — it is a *quotation* from another system, and the chip is the quotation mark.
+
+The tight padding is load-bearing and it is not a style choice: **generous padding (4×12) means badge; tight padding (1×6) means identifier.** It also has to survive inline in a 13px feed line, where a badge's padding would blow the line height apart.
+
+### The badge system
+
+**ServiceNow records wear PILLS (`{rounded.pill}`). Jira records wear STAMPS (`{rounded.xs}`).** Shape is the first and most robust carrier of the boundary — it survives greyscale, CVD, and a squint from across the room. `{rounded.xs}` was documented as "reserved for badge accents" and never used; it is claimed here.
+
+**Status category** is the only Jira object with stamp chrome. One hue, three **ink densities** — a ladder of coverage, not of colour:
+
+| | Treatment | Reads as |
+|---|---|---|
+| **To Do** | `{component.jira-stamp-todo}` — hollow, border only | not started |
+| **In Progress** | `{component.jira-stamp-progress}` — tinted fill | in motion |
+| **Done** | `{component.jira-stamp-done}` — solid fill, reversed type | finished |
+
+The ladder is *lightness*, so it survives colour-vision deficiency and photocopying — the ordering is legible with no hue perception at all.
+
+**And it solves the collision the boundary depends on.** A Jira **Done** is a *solid blue square*. A ServiceNow **Closed** is a *tinted green pill*. They differ in **shape**, in **hue**, and in **fill density** — three redundant signals, so no single failure collapses the distinction. This is the one confusion the surface cannot afford, and it is defended three times over.
+
+**Issue type and priority carry no chrome at all** (`{component.jira-fact}`): a glyph in `{colors.jira-ink}`, a word in `{colors.ink}`. Type is *identity* (Story / Bug / Task / Epic / Sub-task); priority is a *rank*, and its glyph is a directional chevron pair (Highest ⌃⌃ → Lowest ⌄⌄) so the ordering is carried by **shape**, never by colour — no red "Highest", which would both steal `{colors.error}`'s meaning and encode severity in hue alone.
+
+Consequence, and it is the point: **there is exactly one stamp per issue.** The stamp shape stays a rare, meaningful mark instead of degrading into badge soup — the same scarcity discipline that governs coral, now governing blue.
+
+### Typography: the headline stays Copernicus
+
+A Jira issue's summary is set in `{typography.display-sm}` — the serif, weight 400, negative tracking — exactly as a change's `short_description` is. This is deliberate and it is the hinge of the whole design.
+
+**The serif is the console's voice reading a foreign record aloud. The blue is the record's provenance.** Those are different jobs and they must not be conflated. Switching the headline to a sans — or worse, to Atlassian's own type voice — would say *"you have left this application"*, which is false. You haven't. You are still in the Weekend Change Console; it is simply showing you something it does not own. **A different system, not a different app.** The paper changes; the printing press does not.
+
+The corollary: **do not create cool text tokens.** Body copy, meta lines and labels on the Jira surface take the console's ordinary `{colors.ink}` / `{colors.body-text}` / `{colors.muted}`. `{colors.jira-ink}` is reserved for type that must read as *Jira identity* — the key, the stamp labels, the glyphs. Warm gray on faintly-cool paper is entirely normal in print, and recolouring the running text cool is precisely the "different app" failure above, committed one word at a time.
+
+### Monospace
+
+Jira sets issue keys in mono. **We do not.** `NET-4821` is the sans stack with `tabular-nums`, like every other identifier in this console. See Typography > Monospace — it is not negotiable, and the Jira surface is the single most tempting place in the app to break it (keys, descriptions, stack traces in comments). Descriptions and comment bodies are `<div>` with `whitespace-pre-wrap`. **Never a `<pre>`, never a `<code>`.**
+
 ## Do's and Don'ts
 
 ### Do
@@ -624,7 +856,7 @@ Two things the ring must not be:
 ### Don't
 - Don't use cool grays or pure white for canvas. Cream is the brand.
 - Don't bold serif display weight. Copernicus at 700 reads as bombastic; the system stays at 400.
-- Don't use cool blue or saturated cyan as a brand accent. The coral is the brand voltage.
+- Don't use cool blue or saturated cyan as a brand accent. The coral is the brand voltage. **This is unamended by Foreign Records** — `{colors.jira-ink}` is not an accent, it is *provenance*, and it is confined to foreign-record surfaces and `{component.jira-key-chip}`. Blue is a ground, never an accent. It may not paint a link, a button, a status, an emphasis, or anything at all on a native record.
 - Don't put coral everywhere. The coral is scarce on individual elements and generous only on full-bleed coral callout cards.
 - Don't use Inter for display headlines. The serif character is the brand voice.
 - Don't repeat the same surface mode in two consecutive bands. The pacing alternates: cream → cream-card → dark-mockup → cream → coral-callout → dark-footer.
@@ -669,7 +901,7 @@ Two things the ring must not be:
 3. Use `{token.refs}` everywhere — never inline hex.
 4. Never document hover. Default and Active/Pressed states only — **plus Focus**, which is an accessibility requirement, not a style state. `{component.focus-ring}` is the one recipe; don't leave it out because this rule used to end at "Pressed".
 5. Display headlines stay Copernicus serif 400 with negative tracking. Body stays StyreneB / Inter 400. The split is unbreakable.
-6. Cream + coral + dark navy is the trinity. Don't introduce a fourth surface tone (no purple cards, no green sections).
+6. Cream + coral + dark is the trinity. Don't introduce a fourth surface tone (no purple cards, no green sections). **One exception exists and it is closed:** `{colors.jira-canvas}` — see Foreign Records. It is admitted to carry a semantic the system had no way to express (this record is not ours), not to add a colour. It is not a precedent for a fifth tone: a new surface tone has to justify itself by naming a *missing semantic*, not a mood. "Purple for security changes" is a mood. There is no second exception pending.
 7. When in doubt about emphasis: bigger Copernicus serif before bolder weight.
 
 ## Known Gaps

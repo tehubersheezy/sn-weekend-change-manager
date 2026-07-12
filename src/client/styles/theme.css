@@ -97,6 +97,87 @@
    * not have to wonder why a link at rest is painted with the press colour.
    */
   --primary-ink: #a9583e;
+
+  /* ------------------------------------------------------------------------ */
+  /* FOREIGN RECORDS — the Jira family. See DESIGN.md > Foreign Records.       */
+  /* ------------------------------------------------------------------------ */
+  /*
+   * The one blue in the system, and the only hue admitted since the extraction.
+   * It does NOT mean "accent", "link", "info" or "done". It means exactly one
+   * thing: THIS RECORD DOES NOT LIVE IN SERVICENOW. Blue is paper, not ink — a
+   * ground the console prints a foreign record on. The moment blue is used to
+   * make something stand out, the rule has been broken. DESIGN.md's "don't use
+   * cool blue as a brand accent" is still in force; provenance is not an accent.
+   *
+   * Why hue 256. Every surface in this system is warm (H 68-95) and every accent
+   * hue lives in H 24-179 — the palette occupies barely half the wheel and the
+   * entire cool half is empty. The canvas is H 95, so its true complement is 275
+   * — which is violet, and Iteration Guide #6 forbids purple. Rotating the other
+   * way hits cyan by H 235, which the Don'ts forbid by name. H 250-265 is the
+   * whole legal corridor, and 256 sits in it: 161deg from the canvas, as cool as
+   * this system can legally go.
+   *
+   * Why NOT Atlassian's own blue. #0052CC is C 0.201 and #2563EB is C 0.215.
+   * Nothing in this palette exceeds C 0.165 (--destructive) and the mean is 0.12.
+   * Jira's blue carries 1.2-1.3x the chroma of the loudest colour we own; on warm
+   * cream it does not read as "Jira", it reads as a different and cheaper site.
+   * Ours takes its foreignness from hue opposition instead and stays in-band at
+   * C 0.115 — an ink-blue, not a button-blue.
+   *
+   * Why there is no light --jira step, when every other hue here has a fill AND an
+   * ink. WCAG luminance is 71% green / 21% red / 7% blue, so a blue is always
+   * darker in WCAG terms than its perceptual lightness implies. A blue at coral's
+   * exact OKLCH lightness (L 0.66) measures 2.96:1 on cream where coral measures
+   * 3.11:1 — it misses the 3:1 floor for shapes. Clearing 3:1 forces a blue below
+   * every other fill in the system, which collapses it into its own ink step. So
+   * the family ships ONE chromatic token. --jira-ink is the type colour, the glyph
+   * colour, and the one solid fill. Do not "complete" the family by inventing a
+   * light --jira: it cannot pass, and its only honest value is this one.
+   *
+   * Why opaque, when the semantic pills use /15 alphas. Those pills only ever land
+   * on two surfaces (canvas, surface-card) and alpha was safe. A Jira stamp lands
+   * on cream, on --jira-canvas AND on --jira-card, and an alpha would compound into
+   * three different rendered fills to audit. Opaque is one. Never alpha-modify a
+   * Jira fill: the tinted step already exists and it is --jira-card. (That forbidden
+   * class is deliberately not spelled out here — Tailwind extracts class names from
+   * comments too, so naming it would compile it.)
+   *
+   * Measured (fg on bg). Type gate 4.5:1, shape/focus gate 3:1:
+   *   --jira-ink on canvas 5.61 · surface-card 4.89 · jira-canvas 5.53 · jira-card 4.86
+   *   --jira-on on a --jira-ink fill ("Done") 5.53  [the coral button is 3.28 — this
+   *     stamp is the most legible badge in the app]
+   *   --primary focus ring on --jira-canvas 3.07  (on canvas it is 3.11)
+   */
+
+  /* The hue. TYPE, SHAPE and the one solid FILL — all three. */
+  --jira-ink: #3465a5;
+  /*
+   * The pane floor: the provenance signal, and the whole reason the surface reads
+   * as foreign. It is a WHISPER — 1.015:1 against cream — and it has to be, because
+   * the coral focus ring must still clear 3:1 on it and that left only 3.7% of
+   * luminance headroom below the canvas. A darker "blue panel" would have killed
+   * the focus ring. The tint reads anyway because it is never seen alone: the
+   * console is a 50/50 split and this pane always sits beside the cream one. Warm/
+   * cool sign flip does the work that lightness cannot — cream is R-B = +5, this is
+   * R-B = -13. Identity is never colour-alone, so the surface also says "Jira" in
+   * words, in the header.
+   */
+  --jira-canvas: #f2f8ff;
+  /* Card fills, stamp fills, the key chip. The blue-family --surface-card. */
+  --jira-card: #deeafb;
+  /*
+   * Edges. Deliberately a heavier step than the warm --border (1.39:1 on cream vs
+   * 1.25:1): it has to survive on a SELECTED surface-card row, where --jira-card as
+   * a fill measures 1.007:1 and simply vanishes. That is why the key chip always
+   * carries border-jira-hairline — an object that crosses a boundary brings its own
+   * edge. Stamps that stay home on the Jira pane don't need one.
+   */
+  --jira-hairline: #c3d7f2;
+  /*
+   * Type on a --jira-ink fill. Same hex as --jira-canvas, named for its role —
+   * exactly the precedent --on-dark sets against --canvas.
+   */
+  --jira-on: #f2f8ff;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -151,6 +232,23 @@
   --color-teal-ink: var(--teal-ink);
   --color-amber-ink: var(--amber-ink);
   --color-primary-ink: var(--primary-ink);
+
+  /*
+   * Foreign records (Jira). The exception to "every hue has a fill and an ink":
+   * this one has only an ink — a light blue cannot clear 3:1 (see the note above).
+   *
+   * --color-jira-canvas earns its keep twice: it is the pane fill AND the focus
+   * ring's offset colour on that pane (ring-offset-jira-canvas). DESIGN.md pins the
+   * offset to {colors.canvas}, but the real rule was always "the offset is the
+   * surface the element sits on" — canvas was simply the only surface there was.
+   * A cream offset on blue paper is a visible cream halo, and it is the single
+   * easiest mistake to make on this surface.
+   */
+  --color-jira-ink: var(--jira-ink);
+  --color-jira-canvas: var(--jira-canvas);
+  --color-jira-card: var(--jira-card);
+  --color-jira-hairline: var(--jira-hairline);
+  --color-jira-on: var(--jira-on);
 
   /* Radius scale (DESIGN.md rounded tokens) */
   --radius-xs: 4px;

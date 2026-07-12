@@ -5,7 +5,7 @@ import type { ChangeService } from '../services/ChangeService'
 import type { JiraService } from '../services/JiraService'
 import type { SnowAmb } from '../services/SnowAmb'
 import { useRecordWatch } from '../hooks/useAmb'
-import { useJiraLinks } from '../hooks/useJiraLinks'
+import { useJiraSummaries } from '../hooks/useJiraSummaries'
 import { display, value } from '../utils/fields'
 import { formatDateTime, parseSnDate } from '../utils/datetime'
 import { Badge } from './ui/badge'
@@ -32,6 +32,7 @@ export function ChangeDetailView({
   onTabChange,
   onLoaded,
   onBack,
+  onOpenJira,
 }: {
   service: ChangeService
   jiraService: JiraService
@@ -48,6 +49,8 @@ export function ChangeDetailView({
   onLoaded?: (changeNumber: string) => void
   /** Return to the pane's resting view (the weekend activity feed). */
   onBack?: () => void
+  /** Open a Jira issue in this pane. The change stays selected behind it. */
+  onOpenJira: (key: string) => void
 }) {
   const [change, setChange] = useState<ChangeRecord | null>(null)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
@@ -93,10 +96,12 @@ export function ChangeDetailView({
   useRecordWatch(amb, 'task_ci', `task=${sysId}`, liveRefresh)
 
   // Jira issues ride on the change tasks (correlation_display holds the key);
-  // the scripted REST API turns those keys into links, if Jira is configured.
+  // the scoped REST API turns those keys into issue summaries. On this tab the
+  // issues ARE the content, so the summaries are worth the round-trip — unlike
+  // the activity feed, where a bare key is the right density.
   const jiras = useMemo(() => jiraIssuesFromTasks(tasks), [tasks])
   const jiraKeys = useMemo(() => jiras.map((j) => j.key), [jiras])
-  const jiraLinks = useJiraLinks(jiraService, jiraKeys)
+  const jiraSummaries = useJiraSummaries(jiraService, jiraKeys)
 
   const start = change && parseSnDate(value(change.start_date))
   const end = change && parseSnDate(value(change.end_date))
@@ -235,7 +240,7 @@ export function ChangeDetailView({
             </TabsContent>
 
             <TabsContent value="jiras">
-              <JiraList issues={jiras} links={jiraLinks} />
+              <JiraList issues={jiras} summaries={jiraSummaries} onOpen={onOpenJira} />
             </TabsContent>
           </Tabs>
         </>

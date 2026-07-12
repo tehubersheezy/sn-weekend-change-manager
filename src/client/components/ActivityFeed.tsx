@@ -2,9 +2,7 @@ import { Fragment, useMemo } from 'react'
 import { ArrowRight, CheckCircle2, CircleDot, MessageSquare, Sparkles, StickyNote } from 'lucide-react'
 import type { FeedEvent } from '../services/ActivityService'
 import { FEED_LIMIT } from '../services/ActivityService'
-import type { JiraService } from '../services/JiraService'
 import type { ChangeRecord, TaskRecord } from '../types'
-import { useJiraLinks } from '../hooks/useJiraLinks'
 import { display, value } from '../utils/fields'
 import { formatDay, formatTime } from '../utils/datetime'
 import { asStateField } from '../utils/stateLabels'
@@ -67,16 +65,17 @@ export function ActivityFeed({
   error,
   changes,
   tasks,
-  jiraService,
   onOpen,
+  onOpenJira,
 }: {
   events: FeedEvent[]
   loading: boolean
   error: string | null
   changes: ChangeRecord[]
   tasks: TaskRecord[]
-  jiraService: JiraService
   onOpen: (sysId: string, tab?: DetailTab) => void
+  /** Open a Jira issue in the detail pane. */
+  onOpenJira: (key: string) => void
 }) {
   // Join events to loaded records; events on records that left the window
   // (or task events whose parent isn't loaded) drop out here.
@@ -109,11 +108,10 @@ export function ActivityFeed({
     return joined
   }, [events, changes, tasks])
 
-  // One resolve for every key on screen; JiraService caches across renders and
-  // shares its cache with the detail pane's Jiras tab.
-  const jiraKeys = useMemo(() => [...new Set(items.flatMap((i) => i.jiraKeys))], [items])
-  const jiraLinks = useJiraLinks(jiraService, jiraKeys)
-
+  // No issue summaries are fetched here on purpose. A feed row names the records
+  // an update touched; a bare key is the right density for that, and the summary
+  // is one click away on the issue itself. The Jiras tab is the surface that
+  // needs summaries, because there the issues ARE the content.
   const days = useMemo(() => {
     const groups: { day: string; items: FeedItem[] }[] = []
     for (const item of items) {
@@ -172,7 +170,7 @@ export function ActivityFeed({
               <ol className="divide-y divide-hairline-soft">
                 {group.items.map((item) => (
                   <li key={item.event.id}>
-                    <FeedRow item={item} jiraLinks={jiraLinks} onOpen={onOpen} />
+                    <FeedRow item={item} onOpen={onOpen} onOpenJira={onOpenJira} />
                   </li>
                 ))}
               </ol>
@@ -197,12 +195,12 @@ export function ActivityFeed({
  */
 function FeedRow({
   item,
-  jiraLinks,
   onOpen,
+  onOpenJira,
 }: {
   item: FeedItem
-  jiraLinks: Map<string, string>
   onOpen: (sysId: string, tab?: DetailTab) => void
+  onOpenJira: (key: string) => void
 }) {
   const { event, change, task, jiraKeys } = item
   const Icon = KIND_ICON[event.kind]
@@ -243,7 +241,7 @@ function FeedRow({
           {jiraKeys.map((key) => (
             <Fragment key={key}>
               <Sep />
-              <JiraLink issueKey={key} url={jiraLinks.get(key)} />
+              <JiraLink issueKey={key} onOpen={onOpenJira} />
             </Fragment>
           ))}
           <Sep />

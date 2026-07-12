@@ -34,6 +34,7 @@ import { ExecuteList } from './components/ExecuteList'
 import { ReviewList } from './components/ReviewList'
 import { TimelineView } from './components/TimelineView'
 import { ChangeDetailView, type DetailTab } from './components/ChangeDetailView'
+import { JiraDetailView } from './components/JiraDetailView'
 import { ActivityFeed } from './components/ActivityFeed'
 import { runDiagnostics } from './utils/diag'
 
@@ -53,28 +54,35 @@ function loadWindowConfig(): WindowConfig {
   return DEFAULT_WINDOW_CONFIG
 }
 
-function urlState(): { screen: ScreenKey | null; id: string | null } {
+/**
+ * The three axes of navigation. `jira` layers OVER `id` rather than replacing
+ * it: an issue is opened FROM a change and closing it returns you there, so both
+ * have to survive a reload of `?id=…&jira=…`.
+ */
+function urlState(): { screen: ScreenKey | null; id: string | null; jira: string | null } {
   const params = new URLSearchParams(window.location.search)
   const screen = phaseByKey(params.get('screen'))?.key ?? null
-  return { screen, id: params.get('id') }
+  return { screen, id: params.get('id'), jira: params.get('jira') }
 }
 
-function titleFor(changeNumber?: string): string {
-  return changeNumber ? `${changeNumber} — ${APP_TITLE}` : APP_TITLE
+/** Whatever the detail pane is showing names the document — a change, or a Jira key. */
+function titleFor(recordName?: string): string {
+  return recordName ? `${recordName} — ${APP_TITLE}` : APP_TITLE
 }
 
 /** Push screen + selection into history, bridging to Polaris in an iframe. */
-function pushUrl(screen: ScreenKey, id: string | null, title: string) {
+function pushUrl(screen: ScreenKey, id: string | null, jira: string | null, title: string) {
   const params = new URLSearchParams()
   params.set('screen', screen)
   if (id) params.set('id', id)
+  if (jira) params.set('jira', jira)
   const relativePath = `${window.location.pathname}?${params.toString()}`
 
   if (window.self !== window.top && typeof window.CustomEvent.fireTop === 'function') {
     window.CustomEvent.fireTop('magellanNavigator.permalink.set', { relativePath, title })
-    window.history.pushState({ screen, id }, title, relativePath)
+    window.history.pushState({ screen, id, jira }, title, relativePath)
   } else {
-    window.history.pushState({ screen, id }, title, relativePath)
+    window.history.pushState({ screen, id, jira }, title, relativePath)
     document.title = title
   }
 }
@@ -95,11 +103,16 @@ function refOptions(changes: ChangeRecord[], get: (c: ChangeRecord) => SnField) 
 }
 
 export default function App() {
-  const [{ screen, selectedId }, setNav] = useState<{ screen: ScreenKey; selectedId: string | null }>(() => {
+  const [{ screen, selectedId, jiraKey }, setNav] = useState<{
+    screen: ScreenKey
+    selectedId: string | null
+    jiraKey: string | null
+  }>(() => {
     const fromUrl = urlState()
     return {
       screen: fromUrl.screen ?? defaultScreen(getWeekendWindow({ config: loadWindowConfig() })),
       selectedId: fromUrl.id,
+      jiraKey: fromUrl.jira,
     }
   })
   const [refreshKey, setRefreshKey] = useState(0)
@@ -132,7 +145,8 @@ export default function App() {
   const activityService = useMemo(() => new ActivityService(), [])
   const feed = useActivityFeed(activityService, weekendWindow, changes, tasks, !loading && !error)
 
-  // Shared by the feed and the detail pane's Jiras tab so a key is resolved once.
+  // Shared by the feed, the Jiras tab and the Jira detail pane, so a key that
+  // appears on all three resolves once.
   const jiraService = useMemo(() => new JiraService(), [])
 
   const updateWindowConfig = useCallback((next: WindowConfig) => {
@@ -149,15 +163,20 @@ export default function App() {
       const fromUrl = urlState()
       // The tab isn't in the URL, so a restored change lands on its first tab.
       setDetailTab('details')
-      setNav((prev) => ({ screen: fromUrl.screen ?? prev.screen, selectedId: fromUrl.id }))
+      setNav((prev) => ({
+        screen: fromUrl.screen ?? prev.screen,
+        selectedId: fromUrl.id,
+        jiraKey: fromUrl.jira,
+      }))
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
   useEffect(() => {
-    document.title = titleFor(selectedId ? changeNumber : undefined)
-  }, [selectedId, changeNumber])
+    // The Jira issue is what's on screen when it's open, so it names the tab.
+    document.title = titleFor(jiraKey ?? (selectedId ? changeNumber : undefined))
+  }, [jiraKey, selectedId, changeNumber])
 
   // TEMP diagnostics: dump layout/theme state so we can find why the world
   // clocks vanish on the deployed page. Fires on mount and again after the
@@ -171,27 +190,54 @@ export default function App() {
   const selectScreen = useCallback(
     (next: ScreenKey) => {
       setFilter('all') // state tabs are phase-scoped; reset on screen switch
-      pushUrl(next, selectedId, titleFor())
+      pushUrl(next, selectedId, jiraKey, titleFor())
       setNav((prev) => ({ ...prev, screen: next }))
     },
-    [selectedId],
+    [selectedId, jiraKey],
   )
 
-  /** Open a change, optionally straight onto one of the detail pane's tabs. */
+  /**
+   * Open a change, optionally straight onto one of the detail pane's tabs. Any
+   * open Jira issue closes — the pane shows one record, and this is now that record.
+   */
   const selectChange = useCallback(
     (id: string, tab: DetailTab = 'details') => {
       setChangeNumber(undefined) // clear until the new record loads
       setDetailTab(tab)
-      pushUrl(screen, id, titleFor())
-      setNav((prev) => ({ ...prev, selectedId: id }))
+      pushUrl(screen, id, null, titleFor())
+      setNav((prev) => ({ ...prev, selectedId: id, jiraKey: null }))
     },
     [screen],
   )
 
+  /**
+   * Open a Jira issue in the detail pane. The change behind it stays SELECTED —
+   * it just isn't rendered — so closing the issue returns to it without a refetch,
+   * and the list on the left keeps showing it as the current row.
+   */
+  const openJira = useCallback(
+    (key: string) => {
+      pushUrl(screen, selectedId, key, titleFor(key))
+      setNav((prev) => ({ ...prev, jiraKey: key }))
+    },
+    [screen, selectedId],
+  )
+
+  /**
+   * Leave the issue. Back to the change that referenced it, landing on the Jiras
+   * tab — that's where the key was clicked, so it's where the user expects to be.
+   * With no change behind it (opened from the feed) this falls through to the feed.
+   */
+  const closeJira = useCallback(() => {
+    setDetailTab('jiras')
+    pushUrl(screen, selectedId, null, titleFor())
+    setNav((prev) => ({ ...prev, jiraKey: null }))
+  }, [screen, selectedId])
+
   /** Back to the pane's resting view: the weekend activity feed. */
   const clearSelection = useCallback(() => {
-    pushUrl(screen, null, titleFor())
-    setNav((prev) => ({ ...prev, selectedId: null }))
+    pushUrl(screen, null, null, titleFor())
+    setNav((prev) => ({ ...prev, selectedId: null, jiraKey: null }))
   }, [screen])
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), [])
@@ -266,6 +312,11 @@ export default function App() {
   )
 
   const listProps = { changes: visible, tasksByChange, selectedId, onOpen: selectChange }
+
+  // Where closing the Jira issue lands, stated on the issue's back affordance.
+  // changeNumber survives the change view unmounting, so it's still the number
+  // you came from; a deep-linked ?id=…&jira=… never loaded one, hence the fallback.
+  const jiraBackLabel = selectedId ? (changeNumber ?? 'Change') : 'Weekend activity'
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -345,8 +396,25 @@ export default function App() {
             <ReviewList {...listProps} />
           )}
         </section>
+        {/*
+         * The detail pane shows exactly one thing, and a Jira issue OUTRANKS the
+         * change behind it — you opened the issue from the change, so it's the
+         * nearer record. It also paints in the foreign-system blue, which is why
+         * it can't simply be another tab inside ChangeDetailView: the whole point
+         * is that crossing into Jira is visible.
+         */}
         <section className="min-h-0 overflow-y-auto">
-          {selectedId ? (
+          {jiraKey ? (
+            <JiraDetailView
+              service={jiraService}
+              amb={amb}
+              issueKey={jiraKey}
+              refreshKey={refreshKey}
+              backLabel={jiraBackLabel}
+              onBack={closeJira}
+              onOpenChange={selectChange}
+            />
+          ) : selectedId ? (
             <ChangeDetailView
               service={service}
               jiraService={jiraService}
@@ -357,6 +425,7 @@ export default function App() {
               onTabChange={setDetailTab}
               onLoaded={setChangeNumber}
               onBack={clearSelection}
+              onOpenJira={openJira}
             />
           ) : (
             <ActivityFeed
@@ -365,8 +434,8 @@ export default function App() {
               error={feed.error}
               changes={changes}
               tasks={tasks}
-              jiraService={jiraService}
               onOpen={selectChange}
+              onOpenJira={openJira}
             />
           )}
         </section>
