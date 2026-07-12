@@ -51,9 +51,6 @@ const APPROVAL_BADGE: Record<string, { label: string; variant: 'success' | 'erro
   'not requested': { label: 'Approval reset', variant: 'outline' },
 }
 
-/** Feed badges sit inline in 14px text — one step smaller than list badges. */
-const SMALL_BADGE = 'px-2 py-0.5 text-xs'
-
 /**
  * The right pane's resting view: everything moving across the weekend window —
  * comments, work notes, state transitions, approvals — newest first, grouped
@@ -132,8 +129,10 @@ export function ActivityFeed({
     <div className="flex flex-col gap-8 px-8 py-8">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px] leading-[1.2] tracking-[-0.3px] text-ink">Weekend activity</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          {/* h2, not h1: app.tsx owns the page's h1 (the phase headline), and this
+              pane is its sibling — same level as the list pane's heading. */}
+          <h2 className="text-display-sm text-ink">Weekend activity</h2>
+          <p className="mt-1.5 text-body-sm text-muted-foreground">
             Comments, work notes, and state changes across every change in this window, as they
             happen. Open any change, task, or Jira an update names.
           </p>
@@ -153,12 +152,14 @@ export function ActivityFeed({
         </div>
       ) : error ? (
         <div className="rounded-lg border border-border py-16 text-center">
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-body-sm text-error-ink">{error}</p>
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-border px-8 py-16 text-center">
-          <h2 className="text-[22px] leading-[1.25] tracking-[-0.2px] text-ink">All quiet</h2>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+          {/* h3 — it nests under the pane's own h2. The hand-rolled 22px/-0.2px
+              it used to carry is now a real step on the scale: display-xs. */}
+          <h3 className="text-display-xs text-ink">All quiet</h3>
+          <p className="mx-auto mt-2 max-w-sm text-body-sm text-muted-foreground">
             Nothing has moved in this window yet. Comments, work notes, and state changes will
             appear here the moment they land.
           </p>
@@ -178,7 +179,7 @@ export function ActivityFeed({
             </section>
           ))}
           {events.length >= FEED_LIMIT && (
-            <p className="text-[13px] text-muted-soft">
+            <p className="text-caption text-muted-foreground">
               Showing the latest {FEED_LIMIT} updates.
             </p>
           )}
@@ -209,9 +210,20 @@ function FeedRow({
 
   return (
     <div className="flex w-full items-start gap-3 py-4">
+      {/* Kind is also stated in words by EventLine below — the icon is a glyph. */}
       <Icon className="mt-0.5 size-4 shrink-0 text-muted-soft" />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-sans text-[13px] text-muted-foreground">
+        {/*
+         * The -m-1.5/p-1.5 pair is load-bearing, not decoration. `truncate` means
+         * `overflow: hidden`, which clips descendants to this box's PADDING edge
+         * — and the record links inside paint a focus ring 4px outside their own
+         * box. With no padding, that ring is clipped away on every side and the
+         * links are back to having no visible focus state, which is the whole
+         * defect FOCUS_RING exists to fix. 6px of padding gives the ring room;
+         * the equal negative margin cancels it, so the content box, the
+         * truncation width and the row's layout are all bit-for-bit unchanged.
+         */}
+        <div className="-m-1.5 truncate p-1.5 font-sans text-caption text-muted-foreground">
           <RecordLink title={`Open ${display(change.number)}`} onClick={() => onOpen(changeSysId)}>
             {display(change.number)}
           </RecordLink>
@@ -240,10 +252,16 @@ function FeedRow({
           </span>
         </div>
         <EventLine event={event} task={task} />
+        {/*
+         * The amber rule marks a work note (internal) against a comment (visible
+         * to the requester) — a distinction worth carrying, and it is never the
+         * only carrier: EventLine says "added a work note" in words and the row
+         * icon differs too, so identity is not color-alone.
+         */}
         {(event.kind === 'comment' || event.kind === 'work_note') && event.text && (
           <p
             className={cn(
-              'mt-2 line-clamp-4 whitespace-pre-wrap border-l-2 pl-3 text-sm leading-relaxed text-body-text',
+              'mt-2 line-clamp-4 whitespace-pre-wrap border-l-2 pl-3 text-body-sm text-body-text',
               event.kind === 'work_note' ? 'border-accent-amber' : 'border-border',
             )}
           >
@@ -251,7 +269,7 @@ function FeedRow({
           </p>
         )}
       </div>
-      <span className="shrink-0 font-sans text-[13px] text-muted-soft">
+      <span className="shrink-0 font-sans text-caption text-muted-foreground">
         {formatTime(event.when)}
       </span>
     </div>
@@ -278,7 +296,10 @@ function EventLine({ event, task }: { event: FeedEvent; task?: TaskRecord }) {
     }
     return (
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        {who} <Badge variant={badge.variant} className={SMALL_BADGE}>{badge.label}</Badge>
+        {who}{' '}
+        <Badge variant={badge.variant} size="sm">
+          {badge.label}
+        </Badge>
       </div>
     )
   }
@@ -291,16 +312,13 @@ function EventLine({ event, task }: { event: FeedEvent; task?: TaskRecord }) {
     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
       {who} <span>moved{isTask ? ' task' : ''}</span>
       {isTask ? (
-        <TaskStateBadge state={from} className={SMALL_BADGE} />
+        <TaskStateBadge state={from} size="sm" />
       ) : (
-        <StateBadge state={from} className={SMALL_BADGE} />
+        <StateBadge state={from} size="sm" />
       )}
+      {/* Direction of travel, not a status — the glyph stays decorative. */}
       <ArrowRight className="size-3.5 text-muted-soft" />
-      {isTask ? (
-        <TaskStateBadge state={to} className={SMALL_BADGE} />
-      ) : (
-        <StateBadge state={to} className={SMALL_BADGE} />
-      )}
+      {isTask ? <TaskStateBadge state={to} size="sm" /> : <StateBadge state={to} size="sm" />}
     </div>
   )
 }

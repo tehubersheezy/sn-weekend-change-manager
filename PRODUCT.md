@@ -32,4 +32,6 @@ Calm, editorial, precise. The interface should feel like a considered publicatio
 
 ## Accessibility
 
-Keyboard operable (cards are buttons with focus rings), visible focus states (3px coral ring at 15% alpha), chart palettes validated for CVD separation and ≥3:1 contrast against the cream surface, identity never color-alone.
+Keyboard operable — every row that opens something is reachable and has a visible focus state: a 2px full-strength coral ring at a 2px canvas offset (3.1:1 on cream, clearing WCAG 2.4.11). Coral *at 15% alpha* is a halo, not an indicator — it measures 1.16:1 and is only legible paired with the coral border of `text-input-focused`; this doc used to promise it, and the app shipped an invisible focus state for it.
+
+Status pills take a `-ink` label on their tinted fill (≥4.5:1) — the light semantic hues are fills, not text colors. Chart palettes are validated for CVD separation and ≥3:1 contrast against the cream surface. Identity is never color-alone.

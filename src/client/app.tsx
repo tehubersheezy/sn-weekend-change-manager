@@ -27,7 +27,7 @@ import { TopNav } from './components/TopNav'
 import { WindowControls } from './components/WindowControls'
 import { StatTiles } from './components/StatTiles'
 import { List as ListIcon, CalendarRange } from 'lucide-react'
-import { cn } from './lib/utils'
+import { cn, FOCUS_RING } from './lib/utils'
 import { CenteredState, LoadingSkeletons } from './components/ChangeList'
 import { PlanList } from './components/PlanList'
 import { ExecuteList } from './components/ExecuteList'
@@ -275,9 +275,7 @@ export default function App() {
       <header data-diag="content-header" className="flex flex-col gap-6 border-b border-border px-8 pb-6 pt-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-[36px] leading-[1.15] tracking-[-0.5px] text-ink">
-              {phase.headline}
-            </h1>
+            <h1 className="text-display-md text-ink">{phase.headline}</h1>
             <p className="mt-1.5 text-sm text-muted-foreground">{weekendWindow.label}</p>
           </div>
           <WindowControls
@@ -327,7 +325,10 @@ export default function App() {
             <LoadingSkeletons />
           ) : error ? (
             <CenteredState title="Couldn't load changes" action="Try again" onRefresh={refresh}>
-              <p className="max-w-md text-sm text-destructive">{error}</p>
+              {/* error-ink, not the destructive FILL hue: the five semantic hues are
+                  fills, not text colors (DESIGN.md > Colors > Semantic). #c64545 as
+                  type on cream is 4.6:1; the -ink step is 6.2:1. */}
+              <p className="max-w-md text-body-sm text-error-ink">{error}</p>
             </CenteredState>
           ) : view === 'timeline' ? (
             <TimelineView
@@ -387,7 +388,7 @@ function RefFilter({
 }) {
   return (
     <Select value={selected} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-36 text-[13px]">
+      <SelectTrigger className="h-8 w-36 text-caption">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -424,7 +425,8 @@ function ViewToggle({
           title={`${label} view`}
           onClick={() => onChange(key)}
           className={cn(
-            'inline-flex items-center rounded-md p-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15',
+            'inline-flex items-center rounded-md p-2',
+            FOCUS_RING,
             view === key ? 'bg-surface-card text-ink' : 'text-muted-foreground',
           )}
         >

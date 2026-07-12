@@ -26,7 +26,7 @@ export function CenteredState({
 }) {
   return (
     <div className="flex flex-col items-center gap-4 rounded-lg border border-border py-20 text-center">
-      <h2 className="text-[28px] leading-[1.2] tracking-[-0.3px] text-ink">{title}</h2>
+      <h2 className="text-display-sm text-ink">{title}</h2>
       {children}
       {action && onRefresh && (
         <Button variant="secondary" onClick={onRefresh}>
@@ -37,11 +37,9 @@ export function CenteredState({
   )
 }
 
-/** Caption-style lane / day-group header. */
+/** Caption-style lane / day-group header — `{typography.caption-uppercase}`. */
 export function GroupLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-xs font-medium uppercase tracking-[1.5px] text-muted-foreground">
-      {children}
-    </div>
+    <div className="text-caption-upper font-medium uppercase text-muted-foreground">{children}</div>
   )
 }

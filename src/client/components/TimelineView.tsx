@@ -3,7 +3,7 @@ import type { ChangeRecord } from '../types'
 import type { WeekendWindow } from '../utils/weekendWindow'
 import { display, value } from '../utils/fields'
 import { formatDayTime, parseSnDate } from '../utils/datetime'
-import { cn } from '../lib/utils'
+import { cn, FOCUS_RING } from '../lib/utils'
 import { CenteredState } from './ChangeList'
 
 /**
@@ -77,7 +77,7 @@ export function TimelineView({
   if (changes.length === 0) {
     return (
       <CenteredState title="Nothing to chart">
-        <p className="max-w-md text-sm text-muted-foreground">
+        <p className="max-w-md text-body-sm text-muted-foreground">
           No changes in this phase overlap the window.
         </p>
       </CenteredState>
@@ -99,7 +99,7 @@ export function TimelineView({
             t.label && (
               <span
                 key={t.left}
-                className="absolute -translate-x-1/2 whitespace-nowrap text-[11px] text-muted-soft"
+                className="absolute -translate-x-1/2 whitespace-nowrap text-caption text-muted-foreground"
                 style={{ left: `${t.left}%` }}
               >
                 {t.label}
@@ -121,7 +121,9 @@ export function TimelineView({
           ))}
           {nowLeft !== null && (
             <div className="absolute bottom-0 top-0 w-px bg-ink/50" style={{ left: `${nowLeft}%` }}>
-              <span className="absolute -top-0.5 left-1.5 text-[11px] font-medium text-ink">Now</span>
+              <span className="absolute -top-0.5 left-1.5 text-caption font-medium text-ink">
+                Now
+              </span>
             </div>
           )}
         </div>
@@ -129,8 +131,10 @@ export function TimelineView({
         <div className="flex flex-col">
           {changes.map((c) => {
             const id = value(c.sys_id)
-            const s = parseSnDate(value(c.start_date))?.getTime()
-            const e = parseSnDate(value(c.end_date))?.getTime()
+            const startDate = parseSnDate(value(c.start_date))
+            const endDate = parseSnDate(value(c.end_date))
+            const s = startDate?.getTime()
+            const e = endDate?.getTime()
             const left = s !== undefined ? pct(s) : 0
             const width = e !== undefined && s !== undefined ? Math.max(pct(e) - left, 0.8) : 0.8
             const color = STATE_COLORS[value(c.state)] ?? FALLBACK_COLOR
@@ -138,24 +142,43 @@ export function TimelineView({
             return (
               <div
                 key={id}
-                className={cn(
-                  'flex h-10 cursor-pointer items-center rounded-md',
-                  selected && 'bg-surface-card',
-                )}
+                role="button"
+                tabIndex={0}
+                // The bar's state is carried by color for sighted users (decoded by
+                // the legend) and by the hover tooltip. Neither reaches assistive
+                // tech, so the row's accessible name spells out state + window —
+                // identity is never color-alone.
+                aria-label={`${display(c.number)}: ${display(c.short_description)}. ${display(
+                  c.state,
+                )}, ${formatDayTime(startDate)} to ${formatDayTime(endDate)}.`}
+                aria-current={selected ? 'true' : undefined}
                 onClick={() => onOpen(id)}
+                onKeyDown={(ev) => {
+                  if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault()
+                    onOpen(id)
+                  }
+                }}
                 onMouseMove={showTip(c)}
                 onMouseLeave={() => setTip(null)}
+                className={cn(
+                  'flex h-10 cursor-pointer items-center rounded-md',
+                  FOCUS_RING,
+                  selected && 'bg-surface-card',
+                )}
               >
                 <div className="w-56 shrink-0 truncate pr-4">
-                  <span className="text-[13px] text-muted-foreground">{display(c.number)}</span>
-                  <span className="ml-2 text-[13px] font-medium text-ink">
+                  <span className="text-caption text-muted-foreground">
+                    {display(c.number)}
+                  </span>
+                  <span className="ml-2 text-caption font-medium text-ink">
                     {display(c.short_description)}
                   </span>
                 </div>
                 <div className="relative h-full flex-1">
                   <div
                     className={cn(
-                      'absolute top-1/2 h-3.5 -translate-y-1/2 rounded-[4px]',
+                      'absolute top-1/2 h-3.5 -translate-y-1/2 rounded-xs',
                       // 2px surface ring separates overlapping bars; ink ring marks selection.
                       selected ? 'ring-2 ring-ink/50' : 'ring-2 ring-background',
                     )}
@@ -171,7 +194,7 @@ export function TimelineView({
       {/* Legend — status identity also carried by row labels and tooltip. */}
       <div className="ml-56 flex flex-wrap gap-x-5 gap-y-1.5">
         {legendStates.map(([v, label]) => (
-          <span key={v} className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          <span key={v} className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
             <span
               className="size-2 rounded-full"
               style={{ backgroundColor: STATE_COLORS[v] ?? FALLBACK_COLOR }}
@@ -184,14 +207,16 @@ export function TimelineView({
       {/* Hover tooltip */}
       {tip && (
         <div
-          className="pointer-events-none absolute z-10 w-64 rounded-md border border-border bg-background p-3 shadow-[0_1px_3px_rgba(20,20,19,0.08)]"
+          className="pointer-events-none absolute z-10 w-64 rounded-md border border-border bg-background p-3 shadow-hairline"
           style={{ left: Math.min(tip.x + 12, 640), top: tip.y + 12 }}
         >
-          <div className="text-[13px] text-muted-foreground">{display(tip.change.number)}</div>
+          <div className="text-caption text-muted-foreground">
+            {display(tip.change.number)}
+          </div>
           <div className="mt-0.5 text-sm font-medium text-ink">
             {display(tip.change.short_description)}
           </div>
-          <div className="mt-1.5 text-[13px] text-body-text">
+          <div className="mt-1.5 text-caption text-body-text">
             {display(tip.change.state)} · {formatDayTime(parseSnDate(value(tip.change.start_date)))}{' '}
             <span className="text-muted-soft">→</span>{' '}
             {formatDayTime(parseSnDate(value(tip.change.end_date)))}

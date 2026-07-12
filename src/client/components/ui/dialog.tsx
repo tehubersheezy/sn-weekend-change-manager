@@ -2,7 +2,7 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 
-import { cn } from '../../lib/utils'
+import { cn, FOCUS_RING } from '../../lib/utils'
 
 /**
  * Dialog — Radix dialog. Overlay is ink at ~40% alpha; the content panel is a
@@ -40,7 +40,12 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-5 top-5 rounded-sm text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15 disabled:pointer-events-none">
+      <DialogPrimitive.Close
+        className={cn(
+          'absolute right-5 top-5 rounded-sm text-muted-foreground disabled:pointer-events-none',
+          FOCUS_RING,
+        )}
+      >
         <X className="size-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -68,7 +73,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('font-display text-2xl leading-tight tracking-tight text-ink', className)}
+    className={cn('font-display text-display-xs text-ink', className)}
     {...props}
   />
 ))

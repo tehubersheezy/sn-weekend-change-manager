@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AmbStatus } from '../services/SnowAmb'
-import { cn } from '../lib/utils'
+import { cn, FOCUS_RING } from '../lib/utils'
 import { PHASES, type ScreenKey } from '../utils/phases'
 
 const CLOCK_ZONES = [
@@ -28,10 +28,12 @@ function WorldClocks() {
     <div data-diag="clocks" className="flex items-center gap-4 max-lg:hidden">
       {CLOCK_ZONES.map((z) => (
         <span key={z.label} className="inline-flex items-baseline gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-muted-soft">
+          {/* The zone key is content, not decoration — without it the time means
+              nothing — so it takes muted-foreground, not the 3.2:1 muted-soft. */}
+          <span className="text-caption-upper font-medium uppercase text-muted-foreground">
             {z.label}
           </span>
-          <span className="text-[13px] font-medium tabular-nums text-body-text">
+          <span className="text-caption font-medium tabular-nums text-body-text">
             {z.fmt.format(now)}
           </span>
         </span>
@@ -44,7 +46,9 @@ function WorldClocks() {
 function LiveIndicator({ status }: { status: AmbStatus }) {
   const label = status === 'live' ? 'Live' : status === 'connecting' ? 'Connecting' : 'Offline'
   return (
-    <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-soft max-md:hidden">
+    <span className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground max-md:hidden">
+      {/* The dot is a shape (muted-soft is fine); the label beside it is a status
+          you read, so it takes muted-foreground. */}
       <span
         className={cn(
           'size-2 rounded-full',
@@ -87,9 +91,7 @@ export function TopNav({
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-background px-6">
       <div className="flex items-center gap-2.5">
         <SpikeMark className="size-5 text-ink" />
-        <span className="font-display text-[19px] leading-none tracking-tight text-ink">
-          Weekend Change Console
-        </span>
+        <span className="font-display text-display-xs text-ink">Weekend Change Console</span>
       </div>
       {/* Top-level screen menu — nav-link type, active gets the category-tab-active pill. */}
       <nav className="flex items-center gap-1">
@@ -100,7 +102,8 @@ export function TopNav({
             aria-current={screen === p.key ? 'page' : undefined}
             onClick={() => onScreenChange(p.key)}
             className={cn(
-              'rounded-md px-3.5 py-2 font-sans text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15',
+              'rounded-md px-3.5 py-2 font-sans text-sm font-medium',
+              FOCUS_RING,
               screen === p.key ? 'bg-surface-card text-ink' : 'text-muted-foreground',
             )}
           >

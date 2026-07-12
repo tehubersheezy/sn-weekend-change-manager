@@ -24,7 +24,7 @@ export function TaskList({ tasks }: { tasks: TaskRecord[] }) {
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-sans text-[13px] text-muted-foreground">
+                <span className="font-sans text-caption text-muted-foreground">
                   {display(t.number)}
                 </span>
                 {/* Jira key — display only, intentionally not a link for now. */}
@@ -35,13 +35,16 @@ export function TaskList({ tasks }: { tasks: TaskRecord[] }) {
               <div className="mt-0.5 text-sm font-medium text-ink">
                 {display(t.short_description) || 'Untitled task'}
               </div>
-              <div className="mt-1 text-[13px] text-muted-soft">
+              {/* Who is on the hook is content, not fine print — muted-soft is
+                  3.2:1 on cream and this is 13px. */}
+              <div className="mt-1 text-caption text-muted-foreground">
                 {display(t.assigned_to) || 'Unassigned'}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-4 sm:flex-col sm:items-end sm:gap-1.5">
               <TaskStateBadge state={t.state} />
-              <div className="font-sans text-[13px] text-body-text">
+              <div className="font-sans text-caption text-body-text">
+                {/* The arrow is a glyph, not content — it stays decorative. */}
                 {formatDayTime(start)} <span className="text-muted-soft">→</span> {formatDayTime(end)}
               </div>
             </div>

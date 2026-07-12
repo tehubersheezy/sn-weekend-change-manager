@@ -19,11 +19,13 @@ export function CiList({ cis }: { cis: AffectedCiRecord[] }) {
             <div className="text-sm font-medium text-ink">
               {display(ci.ci_item) || 'Unknown CI'}
             </div>
-            <div className="mt-1 text-[13px] text-muted-soft">
+            {/* CI class and operational status are the two things you actually
+                came to this tab to read — content, not fine print. */}
+            <div className="mt-1 text-caption text-muted-foreground">
               {display(ci['ci_item.sys_class_name'])}
             </div>
           </div>
-          <div className="shrink-0 text-[13px] text-muted-soft">
+          <div className="shrink-0 text-caption text-muted-foreground">
             {display(ci['ci_item.operational_status'])}
           </div>
         </div>

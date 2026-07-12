@@ -1,7 +1,19 @@
-import { Badge } from './ui/badge'
+import { Badge, type BadgeProps } from './ui/badge'
 import { display, value, type SnValue } from '../utils/fields'
 
 type Variant = 'pill' | 'coral' | 'success' | 'warning' | 'error' | 'teal' | 'amber' | 'outline'
+
+/**
+ * Both badges forward `size` so callers can ask for the small step by name. The
+ * activity feed sets state pills inline in 14px running text and needs it; before
+ * the passthrough it had to restate size="sm"'s padding as a literal, which is a
+ * sync hazard with ui/badge.tsx that nothing would have caught.
+ */
+type StateBadgeProps = {
+  state: SnValue
+  className?: string
+  size?: BadgeProps['size']
+}
 
 /**
  * change_request.state → badge variant. New/Assess/Authorize read as neutral
@@ -19,10 +31,10 @@ const CHANGE_STATE_VARIANT: Record<string, Variant> = {
   '4': 'outline', // Canceled
 }
 
-export function StateBadge({ state, className }: { state: SnValue; className?: string }) {
+export function StateBadge({ state, className, size }: StateBadgeProps) {
   const variant = CHANGE_STATE_VARIANT[value(state)] ?? 'pill'
   return (
-    <Badge variant={variant} className={className}>
+    <Badge variant={variant} size={size} className={className}>
       {display(state) || 'Unknown'}
     </Badge>
   )
@@ -33,7 +45,7 @@ export function StateBadge({ state, className }: { state: SnValue; className?: s
  * across the standard task state set (Open, Work in Progress, Closed Complete /
  * Incomplete / Skipped).
  */
-export function TaskStateBadge({ state, className }: { state: SnValue; className?: string }) {
+export function TaskStateBadge({ state, className, size }: StateBadgeProps) {
   const label = display(state) || 'Unknown'
   const lower = label.toLowerCase()
   let variant: Variant = 'pill'
@@ -43,7 +55,7 @@ export function TaskStateBadge({ state, className }: { state: SnValue; className
   else if (lower.includes('progress')) variant = 'teal'
   else if (lower.includes('open') || lower.includes('pending')) variant = 'amber'
   return (
-    <Badge variant={variant} className={className}>
+    <Badge variant={variant} size={size} className={className}>
       {label}
     </Badge>
   )

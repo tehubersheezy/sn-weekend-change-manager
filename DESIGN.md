@@ -7,10 +7,15 @@ colors:
   primary: "#cc785c"
   primary-active: "#a9583e"
   primary-disabled: "#e6dfd8"
+  primary-ink: "#a9583e"
   ink: "#141413"
   body: "#3d3d3a"
   body-strong: "#252523"
-  muted: "#6c6a64"
+  # Extraction value is #6c6a64. That clears AA on the canvas floor (5.1:1) — the
+  # only surface a marketing page sets secondary text on — but lands at 4.48:1 on
+  # surface-card, which this console uses for every selected row and active tab.
+  # One imperceptible step down clears 4.5:1 on canvas, surface-soft and card.
+  muted: "#67655f"
   muted-soft: "#8e8b82"
   hairline: "#e6dfd8"
   hairline-soft: "#ebe6df"
@@ -29,6 +34,14 @@ colors:
   success: "#5db872"
   warning: "#d4a017"
   error: "#c64545"
+  # Text steps. Every hue above is a FILL; its -ink step is that hue as TYPE.
+  # A label painted in its own fill hue over its own tint measures 1.8-2.1:1.
+  # See Colors > Semantic.
+  success-ink: "#256e33"
+  warning-ink: "#7d5c0c"
+  error-ink: "#8f2f2f"
+  teal-ink: "#0b6e5a"
+  amber-ink: "#8f4a15"
 
 typography:
   display-xl:
@@ -55,6 +68,12 @@ typography:
     fontWeight: 400
     lineHeight: 1.2
     letterSpacing: -0.3px
+  display-xs:
+    fontFamily: "Copernicus, Tiempos Headline, serif"
+    fontSize: 22px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: -0.2px
   title-lg:
     fontFamily: "StyreneB, Inter, sans-serif"
     fontSize: 22px
@@ -97,6 +116,9 @@ typography:
     fontWeight: 500
     lineHeight: 1.4
     letterSpacing: 1.5px
+  # NOT ADOPTED. This product ships no monospace anywhere — record numbers, IDs,
+  # timestamps and plan text all take the sans stack. Retained only to document
+  # the claude.com extraction. Never emit it. See Typography > Monospace.
   code:
     fontFamily: "JetBrains Mono, ui-monospace, monospace"
     fontSize: 14px
@@ -175,7 +197,7 @@ components:
     size: 36px
   text-link:
     backgroundColor: transparent
-    textColor: "{colors.primary}"
+    textColor: "{colors.primary-ink}"
     typography: "{typography.body-md}"
   top-nav:
     backgroundColor: "{colors.canvas}"
@@ -203,6 +225,7 @@ components:
     typography: "{typography.title-md}"
     rounded: "{rounded.lg}"
     padding: 32px
+  # NOT ADOPTED — depends on {typography.code}. No analog in this console.
   code-window-card:
     backgroundColor: "{colors.surface-dark}"
     textColor: "{colors.on-dark}"
@@ -279,6 +302,17 @@ components:
     typography: "{typography.caption-uppercase}"
     rounded: "{rounded.pill}"
     padding: 4px 12px
+  badge-status:
+    backgroundColor: "{colors.success} | {colors.warning} | {colors.error} | {colors.accent-teal} | {colors.accent-amber} at 15% alpha"
+    textColor: "{colors.success-ink} | {colors.warning-ink} | {colors.error-ink} | {colors.teal-ink} | {colors.amber-ink}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.pill}"
+    padding: 4px 12px
+  focus-ring:
+    borderColor: "{colors.primary}"
+    borderWidth: 2px
+    offset: 2px
+    offsetColor: "{colors.canvas}"
   cta-band-coral:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
@@ -326,6 +360,7 @@ The dark surfaces are where Claude shows its product chrome — code blocks, ter
 ### Brand & Accent
 - **Coral / Primary** (`{colors.primary}` — #cc785c): The signature Anthropic warm coral. Used on every primary CTA background, on full-bleed coral callout cards, on the brand wordmark accent. The most-recognized Anthropic color outside of the spike-mark logo.
 - **Coral Active** (`{colors.primary-active}` — #a9583e): The press / hover-darker variant.
+- **Coral Ink** (`{colors.primary-ink}` — #a9583e): Coral as *type*. Same hex as the press variant, named for its role. `{colors.primary}` is a fill: 3.1:1 on cream, fine behind white button type, an AA failure as type. Any coral word — inline link, text button — uses this.
 - **Coral Disabled** (`{colors.primary-disabled}` — #e6dfd8): A desaturated cream-tinted disabled state.
 - **Accent Teal** (`{colors.accent-teal}` — #5db8a6): Used sparingly on secondary product surfaces (terminal status indicators, "active connection" dots in connectors page).
 - **Accent Amber** (`{colors.accent-amber}` — #e8a55a): A small companion warm-tone used on category badges and inline highlights.
@@ -345,8 +380,8 @@ The dark surfaces are where Claude shows its product chrome — code blocks, ter
 - **Ink** (`{colors.ink}` — #141413): All headlines and primary text. Warm dark, slightly off-pure-black.
 - **Body Strong** (`{colors.body-strong}` — #252523): Emphasized paragraphs, lead text.
 - **Body** (`{colors.body}` — #3d3d3a): Default running-text color.
-- **Muted** (`{colors.muted}` — #6c6a64): Sub-headings, breadcrumbs, footer-adjacent secondary text.
-- **Muted Soft** (`{colors.muted-soft}` — #8e8b82): Captions, fine-print, copyright lines.
+- **Muted** (`{colors.muted}` — #67655f): Secondary text — meta lines, timestamps, counts, assignees. **This is the floor for anything a user reads.** Extracted as #6c6a64; darkened one imperceptible step so it also clears 4.5:1 on `{colors.surface-card}`, which this console paints under every selected row and active tab (the marketing surface never did).
+- **Muted Soft** (`{colors.muted-soft}` — #8e8b82): **Decoration only — never running text.** 3.2:1 on cream: it clears the 3:1 bar for glyphs and shapes and fails AA for type. Use it for icon tints, the `·` between links, the `→` in a date range, input placeholders, an offline dot. The moment it is carrying a word someone has to *read* — a name, a time, a status, a count — it is the wrong token and `{colors.muted}` is the right one. The extraction called this "captions, fine-print, copyright lines"; a console has no fine print.
 - **On Primary** (`{colors.on-primary}` — #ffffff): Text on coral buttons.
 - **On Dark** (`{colors.on-dark}` — #faf9f5): Cream-tinted white used on dark surfaces (echoes the canvas tone).
 - **On Dark Soft** (`{colors.on-dark-soft}` — #a09d96): Footer body text, secondary labels in dark mockups.
@@ -356,15 +391,36 @@ The dark surfaces are where Claude shows its product chrome — code blocks, ter
 - **Warning** (`{colors.warning}` — #d4a017): Warning callouts (rare on marketing surfaces).
 - **Error** (`{colors.error}` — #c64545): Validation errors.
 
+**The five semantic hues above are FILLS, not text colors.** They were extracted as status *dots* — shapes, not type — and they do not survive being used as both fill and label. A tinted pill (the hue at 15% alpha) with its label painted in the same hue measures **1.8–2.1:1** (error, the darkest, still only reaches 3.7:1). At 13px that is unreadable, and the status pill is the primary indicator on every card in this console.
+
+Text on a tinted pill takes the deeper same-family **`-ink`** step:
+
+| Fill (hue at 15%) | Label | On canvas | On a selected `{colors.surface-card}` row |
+|---|---|---|---|
+| `{colors.success}` | `{colors.success-ink}` — #256e33 | 5.3:1 | 4.7:1 |
+| `{colors.warning}` | `{colors.warning-ink}` — #7d5c0c | 5.2:1 | 4.6:1 |
+| `{colors.error}` | `{colors.error-ink}` — #8f2f2f | 6.2:1 | 5.5:1 |
+| `{colors.accent-teal}` | `{colors.teal-ink}` — #0b6e5a | 5.3:1 | 4.7:1 |
+| `{colors.accent-amber}` | `{colors.amber-ink}` — #8f4a15 | 5.7:1 | 5.1:1 |
+
+The selected-row case is the tighter one — a tinted pill sitting on an already-tinted row — and it is the one to check when adding a sixth status.
+
+`{colors.amber-ink}` is pulled toward rust rather than taken straight down its own hue. Deepened in place, `{colors.accent-amber}` lands within a few degrees of `{colors.warning-ink}`'s golden olive — and Review (amber) can sit beside an unsuccessful outcome (warning) on the same card, so the two have to stay tellable apart. 16° of hue separation buys that. When deriving a new `-ink`, check it against the *other* inks, not just its own fill.
+
+**The rule generalizes: the light hue is the colour as a FILL or a SHAPE; the `-ink` step is the colour as TYPE — on any surface, not only on its own tint.** A status dot, a chart bar, a 1px rule or a button fill takes the light hue. A word takes the `-ink`. An error message on the bare cream canvas is still type, so it is `{colors.error-ink}`, not `{colors.error}` — even though `{colors.error}` happens to scrape 4.6:1 there. Consistency of *rule* beats a per-case contrast audit, and it means nobody has to relitigate this at each call site.
+
+**Coral obeys the same split.** `{colors.primary}` is a fill — it measures **3.1:1** on cream, which is fine behind white button type and an AA failure as type itself. So the extraction's `{component.text-link}` (an inline coral link) is not usable as written: coral *type* takes `{colors.primary-ink}` (#a9583e, 4.8:1). It carries the same hex as `{colors.primary-active}` deliberately, and is named for its role — a reader should not have to wonder why a link at rest is painted in the press colour.
+
+The timeline's bar palette is separately dataviz-validated (see `TimelineView.tsx`) — those bars are shapes, and their hexes are not `-ink` steps. Do not swap them without re-running the validator.
+
 ## Typography
 
 ### Font Family
-The system runs **Copernicus** (or **Tiempos Headline** as substitute) as the slab-serif display face for headlines, and **StyreneB** (or **Inter** as substitute) as the humanist sans for body, navigation, and UI labels. **JetBrains Mono** handles code blocks. The fallback stack walks `Tiempos Headline, Garamond, "Times New Roman", serif` for display and `Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` for body.
+The system runs **Copernicus** (or **Tiempos Headline** as substitute) as the slab-serif display face for headlines, and **StyreneB** (or **Inter** as substitute) as the humanist sans for body, navigation, and UI labels. The fallback stack walks `Tiempos Headline, Garamond, "Times New Roman", serif` for display and `Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` for body. There is no third face — see Monospace below.
 
 The display/body split is editorial:
-- Copernicus serif (weight 400, negative tracking) → h1, h2, h3, hero display
-- StyreneB sans (weight 400-500) → body, navigation, buttons, captions, labels
-- JetBrains Mono → all code blocks and terminal text
+- Copernicus serif (weight 400, negative tracking) → h1, h2, h3, display headlines, stat numerals
+- StyreneB sans (weight 400-500) → everything else: body, navigation, buttons, captions, labels, and all record numbers, IDs, timestamps and plan text
 
 ### Hierarchy
 
@@ -374,6 +430,7 @@ The display/body split is editorial:
 | `{typography.display-lg}` | 48px | 400 | 1.1 | -1px | Section heads — Copernicus |
 | `{typography.display-md}` | 36px | 400 | 1.15 | -0.5px | Sub-section heads, model names — Copernicus |
 | `{typography.display-sm}` | 28px | 400 | 1.2 | -0.3px | Pricing tier names, callout headlines — Copernicus |
+| `{typography.display-xs}` | 22px | 400 | 1.25 | -0.2px | The console's smallest serif step: dialog titles, stat numerals, wordmark — Copernicus |
 | `{typography.title-lg}` | 22px | 500 | 1.3 | 0 | Pricing plan size labels — StyreneB |
 | `{typography.title-md}` | 18px | 500 | 1.4 | 0 | Feature card titles, intro paragraphs |
 | `{typography.title-sm}` | 16px | 500 | 1.4 | 0 | Connector tile titles, list labels |
@@ -381,9 +438,29 @@ The display/body split is editorial:
 | `{typography.body-sm}` | 14px | 400 | 1.55 | 0 | Footer body, fine-print |
 | `{typography.caption}` | 13px | 500 | 1.4 | 0 | Badge labels, captions |
 | `{typography.caption-uppercase}` | 12px | 500 | 1.4 | 1.5px | Category tags, "NEW" badges |
-| `{typography.code}` | 14px | 400 | 1.6 | 0 | Code blocks — JetBrains Mono |
+| `{typography.code}` | 14px | 400 | 1.6 | 0 | **NOT ADOPTED** — see Monospace |
 | `{typography.button}` | 14px | 500 | 1.0 | 0 | Standard button labels |
 | `{typography.nav-link}` | 14px | 500 | 1.4 | 0 | Top-nav menu items |
+
+The scale is the whole scale. A size that isn't on it (11px, 19px, 24px) is a bug, not a decision — those three all crept into this console before the scale was encoded as tokens. Size, line-height and letter-spacing travel together as one token; never re-tune tracking by hand.
+
+### Note on `display-xs`
+
+`display-xs` (22px serif) is this product's addition, not claude.com's. The extracted display scale bottoms out at 28px because it was pulled from a marketing page, where the smallest serif moment is still a pricing headline. A dense operational console needs one step below that — and the app proved it by inventing three unsanctioned sizes to fill the gap (a 19px wordmark, 22px stat numerals, and a 22px section heading with a made-up -0.2px tracking).
+
+Serif numerals are already blessed by the system — `{component.pricing-tier-card}` sets its *price* in `{typography.display-sm}` (Copernicus serif) — so serif stat values are on-brand. They simply had no token. Three invented sizes collapse into one documented step.
+
+Note it collides in size with `{typography.title-lg}` (22px) and that is intended: the two are the serif and the sans voice at the same size. `display-xs` is a *headline* at 22px; `title-lg` is a *label* at 22px.
+
+### Monospace
+
+**This product uses no monospace. There is no mono face in the system.**
+
+`{typography.code}` and `{component.code-window-card}` are inherited from the claude.com extraction — a marketing site that shows code editor mockups as product chrome. This console has no such surface, and the owner rejects mono type in all circumstances. Both entries are retained above only to document what was extracted; **neither is adopted, and neither may be emitted.**
+
+Record numbers (CHG0030001), sys_ids, timestamps, durations, Jira keys, diffs, and implementation / backout / test plan bodies all set in the sans stack. When digits need to align in a column, use the `tabular-nums` font feature on the sans face — that is the correct tool, and it is not a different font.
+
+One implementation note, because it bites silently: Tailwind's preflight applies a mono family to every `<code>`, `<kbd>`, `<samp>` and `<pre>` with no class involved, deriving it from the `--font-mono` theme variable. **Deleting that variable does not help** — preflight falls back to its own `ui-monospace` stack. So `--font-mono` is deliberately aimed at the sans stack in `theme.css`. It is not a copy-paste error; do not "clean up the duplication." Prefer `<div>` with `whitespace-pre-wrap` over `<pre>` regardless.
 
 ### Principles
 Display sizes use weight 400 (regular), never bold. Negative letter-spacing (-0.3 to -1.5px) is essential — Copernicus without it reads as off-brand. The serif character is what gives Anthropic its literary, considered voice; switching to a sans-serif display would make Claude feel like every other AI tool.
@@ -420,7 +497,7 @@ The cream canvas + serif display + generous internal padding create an editorial
 | Soft hairline | 1px `{colors.hairline}` border | Inputs, sub-nav, occasionally on cards |
 | Cream card | `{colors.surface-card}` background — no shadow | Feature cards, content cards |
 | Dark surface card | `{colors.surface-dark}` background — no shadow | Code editor mockups, model showcase cards |
-| Subtle drop shadow | Faint shadow at low alpha | Hover-elevated states (the system uses `0 1px 3px rgba(20,20,19,0.08)` rarely) |
+| Subtle drop shadow | `0 1px 3px rgba(20,20,19,0.08)` | The one sanctioned elevation, used rarely. It is a named token (`shadow-hairline`) — never inline the rgba. |
 
 The elevation philosophy is **color-block first, shadow rare**. Most depth comes from the cream-vs-dark surface contrast. Shadows are minimal. The dark surface mockups have their own internal product chrome (code editor scrollbars, line numbers, syntax highlighting) which adds detail without needing external shadows.
 
@@ -446,8 +523,8 @@ The elevation philosophy is **color-block first, shadow rare**. Most depth comes
 ### Photography & Illustrations
 Claude's hero rarely uses photography. Instead it uses:
 - Simple line-art illustrations with coral + dark-navy strokes on the cream canvas
-- Code editor mockups (the dominant "hero" treatment on developer-focused pages)
-- Terminal output mockups with monospace text on dark
+- Code editor mockups (the dominant "hero" treatment on developer-focused pages) — **not adopted**
+- Terminal output mockups with monospace text on dark — **not adopted**, see Typography > Monospace
 - Model comparison cards (Opus / Sonnet / Haiku) with abstract geometric thumbnails
 
 When photography is used (rare — mostly testimonials), avatars crop to perfect circles at 40px diameter.
@@ -470,7 +547,7 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 
 **`button-icon-circular`** — 36px circular icon button. Background `{colors.canvas}`, hairline border, ink-color icon. Used for carousel arrows, share, "view more".
 
-**`text-link`** — Inline body links in `{colors.primary}` (the coral). Underlined on press; the coral inline link is one of the system's most distinctive small details.
+**`text-link`** — Inline body links in `{colors.primary-ink}` — coral as type, not the fill hue (see Colors > Semantic). Underlined on press; the coral inline link is one of the system's most distinctive small details.
 
 ### Cards & Containers
 
@@ -498,15 +575,28 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 
 **`text-input`** — Standard text input. Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.body-md}`, rounded `{rounded.md}` (8px), padding 10px × 14px, height 40px. 1px hairline border in `{colors.hairline}`.
 
-**`text-input-focused`** — Focus state. Border thickens or shifts to `{colors.primary}` (coral) for emphasis. Carries a 3px coral-at-15%-alpha outer ring.
+**`text-input-focused`** — Focus state. The border shifts to `{colors.primary}` (coral), and a 3px coral-at-15%-alpha outer ring sits outside it. **The border is the indicator; the ring is only a glow around it.** Read the next section before copying this ring anywhere else — on its own it is invisible.
 
 **`cookie-consent-card`** — Bottom-right floating dark cookie banner. Background `{colors.surface-dark}`, text `{colors.on-dark}`, rounded `{rounded.lg}`, padding `{spacing.lg}` (24px). One of the few places dark surface appears at small scale on cream pages.
+
+### Focus State
+
+**`focus-ring`** — A 2px ring in full-strength `{colors.primary}` (coral), held 2px off the element in `{colors.canvas}`. One recipe, every interactive element: buttons, tabs, cards-as-buttons, inline links, dialog close. This is the console's only focus treatment.
+
+The system's rule is "never document hover; default and active/pressed only" — focus is neither, and it is not a style choice. Cards in this console are `<button>`s and the interface is stated to be keyboard-operable, so the indicator is a hard requirement (WCAG 2.4.11 wants ≥ 3:1 against what's adjacent). Full-strength coral on cream is **3.11:1** and clears it.
+
+Two things the ring must not be:
+
+- **Not the 15%-alpha coral halo alone.** That halo is **1.16:1** on the cream canvas — literally invisible. It reads as a focus state in `{component.text-input-focused}` only because a *coral border* sits inside it doing the actual work. Every element with no border to flip — a button, a tab, a card, a link — that copied the halo got a focus state you cannot see. This is the single easiest mistake to make in this system.
+- **Not offset-less on coral.** A coral ring drawn flush against a coral `{component.button-primary}` is 1.00:1 — it dissolves into the fill. The 2px canvas-colored offset is what separates them, and it restores the full 3.11:1.
 
 ### Tags / Badges
 
 **`badge-pill`** — Small pill label used for category tags. Background `{colors.surface-card}`, text `{colors.ink}`, type `{typography.caption}` (13px / 500), rounded `{rounded.pill}`, padding 4px × 12px.
 
 **`badge-coral`** — Coral-fill badge for "NEW", "BETA", featured highlights. Background `{colors.primary}`, text `{colors.on-primary}`, type `{typography.caption-uppercase}` (12px / 500 / 1.5px tracking), rounded `{rounded.pill}`, padding 4px × 12px.
+
+**`badge-status`** — The tinted status pill, and the workhorse of this console: it is how lifecycle state reads on every card. Fill is one of the five semantic hues at 15% alpha; the label is the matching `-ink` step (never the fill hue — see Colors > Semantic for why, and for the numbers). Type `{typography.caption}` (13px / 500), rounded `{rounded.pill}`, padding 4px × 12px. Status is never carried by color alone: the pill always has a label.
 
 ### Tab / Filter
 
@@ -539,6 +629,9 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 - Don't use Inter for display headlines. The serif character is the brand voice.
 - Don't repeat the same surface mode in two consecutive bands. The pacing alternates: cream → cream-card → dark-mockup → cream → coral-callout → dark-footer.
 - Don't add hover state styling beyond what the system already encodes — primary darkens on press; nothing else changes.
+- Don't reach for monospace, ever — not for record numbers, IDs, timestamps, or plan text. There is no mono face in this system. When digits must align, use `tabular-nums` on the sans face.
+- Don't paint a status label in its own fill hue. Tinted pills take the `-ink` step; the fill hue as text is 1.8–2.1:1.
+- Don't invent a type size. If it isn't on the scale, it's a bug — and don't hand-tune tracking, it ships with the size.
 
 ## Responsive Behavior
 
@@ -574,7 +667,7 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 1. Focus on ONE component at a time. Reference its YAML key (`{component.feature-card}`, `{component.code-window-card}`).
 2. Variants of an existing component (`-active`, `-disabled`, `-focused`) live as separate entries in `components:`.
 3. Use `{token.refs}` everywhere — never inline hex.
-4. Never document hover. Default and Active/Pressed states only.
+4. Never document hover. Default and Active/Pressed states only — **plus Focus**, which is an accessibility requirement, not a style state. `{component.focus-ring}` is the one recipe; don't leave it out because this rule used to end at "Pressed".
 5. Display headlines stay Copernicus serif 400 with negative tracking. Body stays StyreneB / Inter 400. The split is unbreakable.
 6. Cream + coral + dark navy is the trinity. Don't introduce a fourth surface tone (no purple cards, no green sections).
 7. When in doubt about emphasis: bigger Copernicus serif before bolder weight.

@@ -56,10 +56,17 @@ export function JiraList({
             <div className="text-sm">
               <JiraLink issueKey={issue.key} url={links.get(issue.key)} />
             </div>
+            {/* The task line was muted-soft with the number rescued to
+                muted-foreground so it stayed legible. Now that the whole line is
+                muted-foreground, that rescue would be a no-op — same color as its
+                parent — so the number takes the next real step down in lightness
+                (body-text) to keep leading its own line. Deliberately not ink +
+                font-medium: that is exactly INLINE_LINK's rest style, and these
+                task numbers are not links. */}
             <div className="mt-1 flex flex-col gap-1">
               {issue.tasks.map((t) => (
-                <div key={value(t.sys_id)} className="text-[13px] text-muted-soft">
-                  <span className="text-muted-foreground">{display(t.number)}</span>
+                <div key={value(t.sys_id)} className="text-caption text-muted-foreground">
+                  <span className="text-body-text">{display(t.number)}</span>
                   {' · '}
                   {display(t.short_description) || 'Untitled task'}
                 </div>

@@ -23,7 +23,7 @@ export function ExecuteList({
   if (inFlight.length === 0 && upNext.length === 0 && completed.length === 0) {
     return (
       <CenteredState title="Nothing executing">
-        <p className="max-w-md text-sm text-muted-foreground">
+        <p className="max-w-md text-body-sm text-muted-foreground">
           No changes are in flight or queued to start in this window.
         </p>
       </CenteredState>
@@ -34,7 +34,9 @@ export function ExecuteList({
     <div className="flex flex-col gap-3">
       <GroupLabel>{label}</GroupLabel>
       {items.length === 0 ? (
-        <p className="text-sm text-muted-soft">{emptyNote}</p>
+        // An empty-lane note is content, not fine print: muted-foreground (5.1:1),
+        // never muted-soft (3.2:1).
+        <p className="text-body-sm text-muted-foreground">{emptyNote}</p>
       ) : (
         items.map((c) => (
           <ChangeCard

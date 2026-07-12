@@ -89,7 +89,9 @@ export function runDiagnostics(tag = 'mount') {
             probe.remove()
             return hit
         }
-        const fontAvail = ['StyreneB', 'Inter', 'Tiempos Headline', 'Cormorant Garamond', 'JetBrains Mono']
+        // No mono face is probed: the product ships none, so its availability is
+        // not a fact worth knowing. See DESIGN.md > Typography > Monospace.
+        const fontAvail = ['StyreneB', 'Inter', 'Tiempos Headline', 'Cormorant Garamond']
             .map((f) => `${f}=${document.fonts.check(`16px "${f}"`) ? 'YES' : 'no'}`)
             .join('  ')
         const clockLabel = document.querySelector('[data-diag="clocks"] > span > span:nth-child(1)')

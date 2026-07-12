@@ -32,7 +32,14 @@
   --secondary: #f5f0e8;
   --secondary-foreground: #141413;
   --muted: #f5f0e8;
-  --muted-foreground: #6c6a64;
+  /*
+   * DESIGN.md's `muted` is #6c6a64, which clears 4.5:1 on the canvas floor (5.1:1)
+   * — the only surface a marketing page puts secondary text on. This console also
+   * paints it on surface-card (every SELECTED list row, every active tab), where
+   * #6c6a64 lands at 4.48:1 and misses AA. One step down clears 4.5:1 on canvas,
+   * surface-soft AND surface-card. The shift is ~0.001 luminance — imperceptible.
+   */
+  --muted-foreground: #67655f;
   --accent: #efe9de;
   --accent-foreground: #141413;
   --destructive: #c64545;
@@ -60,6 +67,36 @@
   --body-text: #3d3d3a;
   --muted-soft: #8e8b82;
   --hairline-soft: #ebe6df;
+
+  /*
+   * Semantic TEXT steps for tinted status pills. The light semantic hues above
+   * (--success/--warning/--destructive/--accent-teal/--accent-amber) are FILL
+   * colors: painting the same hue on both the /15 fill and the label lands at
+   * 1.8-2.1:1, which is unreadable at 13px. These deeper same-family steps clear
+   * 4.5:1 on their own tint over BOTH the cream canvas and a selected
+   * surface-card row (the tighter case). Text on a tinted pill takes an -ink.
+   *
+   * --amber-ink is pulled toward rust rather than straight down: deepening
+   * #e8a55a on its own hue lands within a few degrees of --warning-ink's golden
+   * olive, and Review (amber) can sit beside an unsuccessful outcome (warning)
+   * on the same card. 16deg of hue separation keeps them tellable apart.
+   */
+  --success-ink: #256e33;
+  --warning-ink: #7d5c0c;
+  --error-ink: #8f2f2f;
+  --teal-ink: #0b6e5a;
+  --amber-ink: #8f4a15;
+
+  /*
+   * Coral obeys the same fill/ink split as the five semantic hues. --primary is a
+   * FILL: on cream it measures 3.1:1, fine behind white button type, an AA failure
+   * as type itself — so `text-link` in the extraction is not usable as-is here.
+   * Coral TEXT takes --primary-ink (4.8:1 on cream).
+   *
+   * Same hex as --primary-active by design, named for its role: a reader should
+   * not have to wonder why a link at rest is painted with the press colour.
+   */
+  --primary-ink: #a9583e;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -107,6 +144,14 @@
   --color-muted-soft: var(--muted-soft);
   --color-hairline-soft: var(--hairline-soft);
 
+  /* Text steps — see the --*-ink notes above. Every hue has a fill and an ink. */
+  --color-success-ink: var(--success-ink);
+  --color-warning-ink: var(--warning-ink);
+  --color-error-ink: var(--error-ink);
+  --color-teal-ink: var(--teal-ink);
+  --color-amber-ink: var(--amber-ink);
+  --color-primary-ink: var(--primary-ink);
+
   /* Radius scale (DESIGN.md rounded tokens) */
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -114,10 +159,67 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
+  /*
+   * Type scale (DESIGN.md typography.*). The `--text-*--line-height` and
+   * `--text-*--letter-spacing` companions make one class carry size + leading +
+   * tracking together, so tracking can never drift away from the size it was
+   * measured for. Encoding the scale here is what stops every headline from
+   * hand-rolling `text-[28px] leading-[1.2] tracking-[-0.3px]` — the drift that
+   * let 11px / 19px / 24px sizes into the app unnoticed.
+   *
+   * Deliberately NO --font-weight companions: weight and text-transform stay
+   * explicit at the call site (font-medium, uppercase) so they can be overridden
+   * without cascade surprises.
+   *
+   * IMPORTANT: these names are duplicated in TEXT_SCALE in lib/utils.ts. A size
+   * token that tailwind-merge doesn't know is treated as a COLOR and silently
+   * dropped by cn(). Add to both files or not at all.
+   */
+  --text-display-md: 36px;
+  --text-display-md--line-height: 1.15;
+  --text-display-md--letter-spacing: -0.5px;
+  --text-display-sm: 28px;
+  --text-display-sm--line-height: 1.2;
+  --text-display-sm--letter-spacing: -0.3px;
+  --text-display-xs: 22px;
+  --text-display-xs--line-height: 1.25;
+  --text-display-xs--letter-spacing: -0.2px;
+  --text-title-lg: 22px;
+  --text-title-lg--line-height: 1.3;
+  --text-title-md: 18px;
+  --text-title-md--line-height: 1.4;
+  --text-title-sm: 16px;
+  --text-title-sm--line-height: 1.4;
+  --text-body-md: 16px;
+  --text-body-md--line-height: 1.55;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.55;
+  --text-caption: 13px;
+  --text-caption--line-height: 1.4;
+  --text-caption-upper: 12px;
+  --text-caption-upper--line-height: 1.4;
+  --text-caption-upper--letter-spacing: 1.5px;
+
+  /*
+   * The single sanctioned elevation (DESIGN.md: "the system uses this rarely").
+   * Depth is color-block first — cream → surface-card → dark. If you reach for a
+   * second shadow value, reach for a surface instead.
+   */
+  --shadow-hairline: 0 1px 3px rgba(20, 20, 19, 0.08);
+
   /* Font stacks — local system substitutes only, no external font links */
   --font-display: 'Tiempos Headline', 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
   --font-sans: 'StyreneB', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /*
+   * NOT a mistake, and NOT redundant with --font-sans — do not "clean this up".
+   * This product ships no monospace anywhere (DESIGN.md > Typography > Monospace).
+   * Tailwind derives --default-mono-font-family from --font-mono and preflight
+   * applies it to EVERY <code>, <kbd>, <samp> and <pre> with no class involved.
+   * Deleting this token does not help: preflight falls back to its own
+   * `ui-monospace, ...` stack. Aiming it at the sans stack is the only way to
+   * make an accidental <pre> render in the body face.
+   */
+  --font-mono: 'StyreneB', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -133,9 +235,10 @@
   }
 
   /*
-   * Serif display face + weight/color only. Size, line-height and letter-spacing
-   * are set per-heading on the display scale (28/36/48/64px) so tracking always
-   * matches the rendered size — see DESIGN.md typography.display-*.
+   * Serif display face + weight/color only — never a size. Headings pick a step
+   * off the scale explicitly (text-display-md / -sm / -xs), which carries the
+   * line-height and negative tracking that step was drawn for. A default size
+   * here would silently win on any heading that forgot to choose one.
    */
   h1,
   h2,

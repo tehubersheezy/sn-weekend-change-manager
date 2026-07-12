@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react'
 import type { ChangeRecord } from '../types'
 import type { Progress } from '../utils/progress'
-import { cn } from '../lib/utils'
+import { cn, FOCUS_RING } from '../lib/utils'
 import { display, value } from '../utils/fields'
 import { formatDayTime, parseSnDate } from '../utils/datetime'
 import { Card } from './ui/card'
@@ -18,6 +18,10 @@ function metaLine(change: ChangeRecord): string {
 /**
  * One change row as a clickable cream card: number + short description + meta on
  * the left, state / planned window / task progress on the right.
+ *
+ * Selection is announced with `aria-current`, not `aria-pressed`: the card is not
+ * a toggle button, it opens a detail view — and on the Execute screen a hundred
+ * cards each announcing "not pressed" is pure screen-reader noise.
  */
 export function ChangeCard({
   change,
@@ -48,27 +52,30 @@ export function ChangeCard({
           onOpen(value(change.sys_id))
         }
       }}
-      aria-pressed={selected}
+      aria-current={selected ? 'true' : undefined}
       className={cn(
-        'cursor-pointer p-6 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15 active:bg-surface-soft',
+        'cursor-pointer p-6 active:bg-surface-soft',
+        FOCUS_RING,
         // Selected = the cream category-tab-active treatment.
         selected && 'bg-surface-card',
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="font-sans text-[13px] text-muted-foreground">
+          <div className="font-sans text-caption text-muted-foreground">
             {display(change.number)}
           </div>
-          <div className="mt-1 flex items-start gap-1.5 text-base font-medium text-ink">
+          <div className="mt-1 flex items-start gap-1.5 text-title-sm font-medium text-ink">
             <span className="min-w-0">{display(change.short_description) || 'Untitled change'}</span>
             <ArrowRight className="mt-1 size-4 shrink-0 text-muted-soft" />
           </div>
-          {meta && <div className="mt-1.5 text-[13px] text-muted-soft">{meta}</div>}
+          {/* The meta line is content people read (group / type / risk), so it
+              takes muted-foreground. Only the glyphs stay at muted-soft. */}
+          {meta && <div className="mt-1.5 text-caption text-muted-foreground">{meta}</div>}
         </div>
         <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
           <StateBadge state={change.state} />
-          <div className="font-sans text-[13px] text-body-text">
+          <div className="font-sans text-caption text-body-text">
             {formatDayTime(start)} <span className="text-muted-soft">→</span> {formatDayTime(end)}
           </div>
           <div className="sm:flex sm:justify-end">

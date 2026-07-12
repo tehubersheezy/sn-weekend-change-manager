@@ -1,5 +1,5 @@
 import { ExternalLink } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { cn, FOCUS_RING } from '../lib/utils'
 
 /**
  * Inline links that sit inside running text (feed meta lines, list rows).
@@ -8,10 +8,18 @@ import { cn } from '../lib/utils'
  * around them, not by color: coral is the system's link accent but it has to
  * stay scarce, and a feed row can carry three of these across eighty rows.
  * Underline is a press state only — DESIGN.md allows no hover styling.
+ *
+ * Focus is the app's one recipe (FOCUS_RING, which brings its own outline-none).
+ * These used to carry the coral-at-15% halo instead — 1.16:1 on cream. That halo
+ * only reads as focus in `text-input-focused`, where a coral BORDER inside it is
+ * doing the work; an inline link has no border to flip, so it had no visible
+ * focus state at all.
+ *
+ * The ring paints 4px outside the text box, so a caller that puts one of these
+ * inside an `overflow-hidden` line has to leave it room or the ring is clipped
+ * away to nothing — see the meta line in ActivityFeed's FeedRow.
  */
-const INLINE_LINK =
-  'rounded-sm font-medium text-ink underline-offset-4 outline-none active:underline ' +
-  'focus-visible:ring-[3px] focus-visible:ring-ring/15'
+const INLINE_LINK = `rounded-sm font-medium text-ink underline-offset-4 active:underline ${FOCUS_RING}`
 
 /** A record number that opens something inside the console. */
 export function RecordLink({

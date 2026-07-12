@@ -20,7 +20,7 @@ export function PlanList({
   if (changes.length === 0) {
     return (
       <CenteredState title="Nothing left to plan">
-        <p className="max-w-md text-sm text-muted-foreground">
+        <p className="max-w-md text-body-sm text-muted-foreground">
           No changes are awaiting assessment, authorization, or scheduling in this window.
         </p>
       </CenteredState>

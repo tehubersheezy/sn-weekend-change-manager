@@ -2,14 +2,17 @@ import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '../../lib/utils'
+import { cn, FOCUS_RING } from '../../lib/utils'
 
 /**
  * Button — DESIGN.md `button-*` family.
  * Type is StyreneB 14px / 500 (text-sm font-medium), radius 8px (rounded-md).
+ *
+ * leading-none is written after the size class deliberately: cn() drops any
+ * leading-* that precedes a font-size (see lib/utils.ts).
  */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap font-sans text-sm font-medium leading-none transition-colors outline-none disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 focus-visible:ring-[3px] focus-visible:ring-ring/15',
+  `inline-flex items-center justify-center gap-2 whitespace-nowrap font-sans text-sm leading-none font-medium transition-colors disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 ${FOCUS_RING}`,
   {
     variants: {
       variant: {
@@ -22,8 +25,9 @@ const buttonVariants = cva(
         // Inline transparent button; subtle cream wash on press.
         ghost:
           'rounded-md text-ink active:bg-surface-card disabled:text-muted-foreground',
-        // text-link → inline coral link, underline on press.
-        link: 'text-primary underline-offset-4 active:underline disabled:text-muted-foreground',
+        // text-link → inline coral link, underline on press. Coral as TYPE takes
+        // primary-ink: the fill hue is 3.1:1 on cream, an AA failure at any size.
+        link: 'text-primary-ink underline-offset-4 active:underline disabled:text-muted-foreground',
         // button-secondary-on-dark → elevated dark fill, cream text (over dark surfaces).
         darkSecondary:
           'rounded-md bg-surface-dark-elevated text-on-dark active:bg-surface-dark-soft disabled:opacity-50',

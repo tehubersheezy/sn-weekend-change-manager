@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
 
-import { cn } from '../../lib/utils'
+import { cn, FOCUS_RING } from '../../lib/utils'
 
 /**
  * Tabs — DESIGN.md `category-tab`. The list is transparent (not the shadcn gray
@@ -28,7 +28,8 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3.5 py-2 font-sans text-sm font-medium text-muted-foreground transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface-card data-[state=active]:text-ink',
+      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3.5 py-2 font-sans text-sm font-medium text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface-card data-[state=active]:text-ink',
+      FOCUS_RING,
       className,
     )}
     {...props}
@@ -42,7 +43,7 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn('mt-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15', className)}
+    className={cn('mt-4', FOCUS_RING, className)}
     {...props}
   />
 ))

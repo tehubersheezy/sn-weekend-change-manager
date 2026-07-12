@@ -28,7 +28,7 @@ export function ReviewList({
   if (changes.length === 0) {
     return (
       <CenteredState title="Nothing to review yet">
-        <p className="max-w-md text-sm text-muted-foreground">
+        <p className="max-w-md text-body-sm text-muted-foreground">
           Changes land here once implementation wraps up and they move to Review or Closed.
         </p>
       </CenteredState>
@@ -52,7 +52,7 @@ export function ReviewList({
                 <div className="flex items-start gap-3">
                   <OutcomeBadge closeCode={c.close_code} />
                   {notes && (
-                    <p className="line-clamp-2 min-w-0 text-[13px] leading-relaxed text-muted-foreground">
+                    <p className="line-clamp-2 min-w-0 text-caption text-muted-foreground">
                       {notes}
                     </p>
                   )}
