@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChangeService } from './services/ChangeService'
 import { ActivityService } from './services/ActivityService'
 import { JiraService } from './services/JiraService'
+import { UserService } from './services/UserService'
 import { useAmbClient } from './hooks/useAmb'
 import { useWeekendChanges } from './hooks/useWeekendChanges'
 import { useActivityFeed } from './hooks/useActivityFeed'
@@ -26,20 +27,29 @@ import {
 import { TopNav } from './components/TopNav'
 import { WindowControls } from './components/WindowControls'
 import { StatTiles } from './components/StatTiles'
-import { List as ListIcon, CalendarRange } from 'lucide-react'
+import { List as ListIcon, CalendarRange, Table as TableIcon } from 'lucide-react'
 import { cn, FOCUS_RING } from './lib/utils'
 import { CenteredState, LoadingSkeletons } from './components/ChangeList'
 import { PlanList } from './components/PlanList'
 import { ExecuteList } from './components/ExecuteList'
 import { ReviewList } from './components/ReviewList'
 import { TimelineView } from './components/TimelineView'
-import { ChangeDetailView, type DetailTab } from './components/ChangeDetailView'
-import { JiraDetailView } from './components/JiraDetailView'
+import { ChangeGridView } from './components/ChangeGridView'
+import { type DetailTab } from './components/ChangeDetailView'
+import { RecordPane, EMPTY_NAV, type DetailNav } from './components/RecordPane'
 import { ActivityFeed } from './components/ActivityFeed'
+import { Dialog, DialogContent, DialogTitle } from './components/ui/dialog'
 import { runDiagnostics } from './utils/diag'
 
 const APP_TITLE = 'Weekend Change Console'
 const CONFIG_KEY = 'wcm.windowConfig'
+
+/**
+ * List and Timeline live in the split layout beside the detail pane; Grid takes
+ * the full width — it exists to read and COPY the register as a table, and a
+ * half-width spreadsheet is neither.
+ */
+type ViewKey = 'list' | 'timeline' | 'grid'
 
 function loadWindowConfig(): WindowConfig {
   try {
@@ -55,34 +65,57 @@ function loadWindowConfig(): WindowConfig {
 }
 
 /**
- * The three axes of navigation. `jira` layers OVER `id` rather than replacing
- * it: an issue is opened FROM a change and closing it returns you there, so both
- * have to survive a reload of `?id=…&jira=…`.
+ * The axes of navigation. `id` is the BASE record (a change); `jira`, `person`
+ * and `task` are overlays that layer OVER it rather than replacing it — a
+ * record is opened FROM a change and closing it returns you there, so both
+ * have to survive a reload of `?id=…&jira=…`. Overlays are mutually exclusive.
  */
-function urlState(): { screen: ScreenKey | null; id: string | null; jira: string | null } {
+function urlState(): {
+  screen: ScreenKey | null
+  id: string | null
+  jira: string | null
+  person: string | null
+  task: string | null
+} {
   const params = new URLSearchParams(window.location.search)
   const screen = phaseByKey(params.get('screen'))?.key ?? null
-  return { screen, id: params.get('id'), jira: params.get('jira') }
+  return {
+    screen,
+    id: params.get('id'),
+    jira: params.get('jira'),
+    person: params.get('person'),
+    task: params.get('task'),
+  }
 }
 
-/** Whatever the detail pane is showing names the document — a change, or a Jira key. */
+/** Whatever the detail pane is showing names the document. */
 function titleFor(recordName?: string): string {
   return recordName ? `${recordName} — ${APP_TITLE}` : APP_TITLE
 }
 
+/** The pane selection, as URL params. Absent keys clear their axis. */
+interface UrlSelection {
+  id?: string | null
+  jira?: string | null
+  person?: string | null
+  task?: string | null
+}
+
 /** Push screen + selection into history, bridging to Polaris in an iframe. */
-function pushUrl(screen: ScreenKey, id: string | null, jira: string | null, title: string) {
+function pushUrl(screen: ScreenKey, sel: UrlSelection, title: string) {
   const params = new URLSearchParams()
   params.set('screen', screen)
-  if (id) params.set('id', id)
-  if (jira) params.set('jira', jira)
+  if (sel.id) params.set('id', sel.id)
+  if (sel.jira) params.set('jira', sel.jira)
+  if (sel.person) params.set('person', sel.person)
+  if (sel.task) params.set('task', sel.task)
   const relativePath = `${window.location.pathname}?${params.toString()}`
 
   if (window.self !== window.top && typeof window.CustomEvent.fireTop === 'function') {
     window.CustomEvent.fireTop('magellanNavigator.permalink.set', { relativePath, title })
-    window.history.pushState({ screen, id, jira }, title, relativePath)
+    window.history.pushState({ screen, ...sel }, title, relativePath)
   } else {
-    window.history.pushState({ screen, id, jira }, title, relativePath)
+    window.history.pushState({ screen, ...sel }, title, relativePath)
     document.title = title
   }
 }
@@ -103,26 +136,33 @@ function refOptions(changes: ChangeRecord[], get: (c: ChangeRecord) => SnField) 
 }
 
 export default function App() {
-  const [{ screen, selectedId, jiraKey }, setNav] = useState<{
+  const [{ screen, selectedId, jiraKey, personId, taskId }, setNav] = useState<{
     screen: ScreenKey
     selectedId: string | null
     jiraKey: string | null
+    personId: string | null
+    taskId: string | null
   }>(() => {
     const fromUrl = urlState()
     return {
       screen: fromUrl.screen ?? defaultScreen(getWeekendWindow({ config: loadWindowConfig() })),
       selectedId: fromUrl.id,
       jiraKey: fromUrl.jira,
+      personId: fromUrl.person,
+      taskId: fromUrl.task,
     }
   })
   const [refreshKey, setRefreshKey] = useState(0)
   const [changeNumber, setChangeNumber] = useState<string | undefined>(undefined)
+  // Like changeNumber: the open overlay's display name, for the document title.
+  const [taskNumber, setTaskNumber] = useState<string | undefined>(undefined)
+  const [personName, setPersonName] = useState<string | undefined>(undefined)
   // Which detail tab an opened change lands on. Owned here, not in the detail
   // view: a feed row's task number must reach the Change tasks tab even when
   // that change is already the one on screen (no sysId change to react to).
   const [detailTab, setDetailTab] = useState<DetailTab>('details')
   const [filter, setFilter] = useState('all')
-  const [view, setView] = useState<'list' | 'timeline'>('list')
+  const [view, setView] = useState<ViewKey>('list')
   const [groupFilter, setGroupFilter] = useState('all')
   const [assigneeFilter, setAssigneeFilter] = useState('all')
 
@@ -149,6 +189,9 @@ export default function App() {
   // appears on all three resolves once.
   const jiraService = useMemo(() => new JiraService(), [])
 
+  // sys_user reads for the person page; caches by sys_id for the session.
+  const userService = useMemo(() => new UserService(), [])
+
   const updateWindowConfig = useCallback((next: WindowConfig) => {
     setWindowConfig(next)
     try {
@@ -167,6 +210,8 @@ export default function App() {
         screen: fromUrl.screen ?? prev.screen,
         selectedId: fromUrl.id,
         jiraKey: fromUrl.jira,
+        personId: fromUrl.person,
+        taskId: fromUrl.task,
       }))
     }
     window.addEventListener('popstate', onPop)
@@ -174,9 +219,14 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    // The Jira issue is what's on screen when it's open, so it names the tab.
-    document.title = titleFor(jiraKey ?? (selectedId ? changeNumber : undefined))
-  }, [jiraKey, selectedId, changeNumber])
+    // Whichever record is on screen names the tab — overlay first, base change last.
+    const name = personId
+      ? personName
+      : taskId
+        ? taskNumber
+        : (jiraKey ?? (selectedId ? changeNumber : undefined))
+    document.title = titleFor(name)
+  }, [personId, personName, taskId, taskNumber, jiraKey, selectedId, changeNumber])
 
   // TEMP diagnostics: dump layout/theme state so we can find why the world
   // clocks vanish on the deployed page. Fires on mount and again after the
@@ -190,22 +240,23 @@ export default function App() {
   const selectScreen = useCallback(
     (next: ScreenKey) => {
       setFilter('all') // state tabs are phase-scoped; reset on screen switch
-      pushUrl(next, selectedId, jiraKey, titleFor())
+      pushUrl(next, { id: selectedId, jira: jiraKey, person: personId, task: taskId }, titleFor())
       setNav((prev) => ({ ...prev, screen: next }))
     },
-    [selectedId, jiraKey],
+    [selectedId, jiraKey, personId, taskId],
   )
 
   /**
    * Open a change, optionally straight onto one of the detail pane's tabs. Any
-   * open Jira issue closes — the pane shows one record, and this is now that record.
+   * open overlay (Jira issue, person, task) closes — the pane shows one record,
+   * and this is now that record.
    */
   const selectChange = useCallback(
     (id: string, tab: DetailTab = 'details') => {
       setChangeNumber(undefined) // clear until the new record loads
       setDetailTab(tab)
-      pushUrl(screen, id, null, titleFor())
-      setNav((prev) => ({ ...prev, selectedId: id, jiraKey: null }))
+      pushUrl(screen, { id }, titleFor())
+      setNav((prev) => ({ ...prev, selectedId: id, jiraKey: null, personId: null, taskId: null }))
     },
     [screen],
   )
@@ -217,8 +268,8 @@ export default function App() {
    */
   const openJira = useCallback(
     (key: string) => {
-      pushUrl(screen, selectedId, key, titleFor(key))
-      setNav((prev) => ({ ...prev, jiraKey: key }))
+      pushUrl(screen, { id: selectedId, jira: key }, titleFor(key))
+      setNav((prev) => ({ ...prev, jiraKey: key, personId: null, taskId: null }))
     },
     [screen, selectedId],
   )
@@ -230,15 +281,100 @@ export default function App() {
    */
   const closeJira = useCallback(() => {
     setDetailTab('jiras')
-    pushUrl(screen, selectedId, null, titleFor())
+    pushUrl(screen, { id: selectedId }, titleFor())
     setNav((prev) => ({ ...prev, jiraKey: null }))
+  }, [screen, selectedId])
+
+  /** Open a person over whatever change is selected; closing returns to it. */
+  const openPerson = useCallback(
+    (pid: string) => {
+      setPersonName(undefined)
+      pushUrl(screen, { id: selectedId, person: pid }, titleFor())
+      setNav((prev) => ({ ...prev, personId: pid, jiraKey: null, taskId: null }))
+    },
+    [screen, selectedId],
+  )
+
+  /** Leave the person page. detailTab is untouched — back to the change as it was. */
+  const closePerson = useCallback(() => {
+    pushUrl(screen, { id: selectedId }, titleFor())
+    setNav((prev) => ({ ...prev, personId: null }))
+  }, [screen, selectedId])
+
+  /**
+   * Open a task's own page. Its parent change becomes the base record — a
+   * task's home is its change, so closing lands on the parent's Change tasks
+   * tab even when the task was reached from a person page or the feed.
+   */
+  const openTask = useCallback(
+    (taskSysId: string, changeSysId: string) => {
+      setTaskNumber(undefined)
+      if (changeSysId !== selectedId) setChangeNumber(undefined)
+      pushUrl(screen, { id: changeSysId || null, task: taskSysId }, titleFor())
+      setNav((prev) => ({
+        ...prev,
+        selectedId: changeSysId || null,
+        taskId: taskSysId,
+        jiraKey: null,
+        personId: null,
+      }))
+    },
+    [screen, selectedId],
+  )
+
+  /** Leave the task, landing on its change's Change tasks tab. */
+  const closeTask = useCallback(() => {
+    setDetailTab('tasks')
+    pushUrl(screen, { id: selectedId }, titleFor())
+    setNav((prev) => ({ ...prev, taskId: null }))
   }, [screen, selectedId])
 
   /** Back to the pane's resting view: the weekend activity feed. */
   const clearSelection = useCallback(() => {
-    pushUrl(screen, null, null, titleFor())
-    setNav((prev) => ({ ...prev, selectedId: null, jiraKey: null }))
+    pushUrl(screen, {}, titleFor())
+    setNav((prev) => ({ ...prev, selectedId: null, jiraKey: null, personId: null, taskId: null }))
   }, [screen])
+
+  /**
+   * The grid's popout. Records opened from the full-width grid peek in a dialog
+   * OVER the grid rather than re-expanding the split layout — the same DetailNav
+   * machine as the pane, just not URL-synced (a popout is transient chrome, like
+   * the window-settings dialog). The pane's selection stays intact underneath,
+   * so flipping back to List restores whatever was open there.
+   */
+  const [popout, setPopout] = useState<DetailNav>(EMPTY_NAV)
+  const [popoutTab, setPopoutTab] = useState<DetailTab>('details')
+  const [popoutChangeNumber, setPopoutChangeNumber] = useState<string | undefined>(undefined)
+  const popoutIsOpen = Boolean(popout.id || popout.jiraKey || popout.personId || popout.taskId)
+
+  const closePopout = useCallback(() => setPopout(EMPTY_NAV), [])
+  const popoutOpenChange = useCallback((id: string, tab: DetailTab = 'details') => {
+    setPopoutChangeNumber(undefined)
+    setPopoutTab(tab)
+    setPopout({ id, jiraKey: null, personId: null, taskId: null })
+  }, [])
+  const popoutOpenJira = useCallback((key: string) => {
+    setPopout((prev) => ({ ...prev, jiraKey: key, personId: null, taskId: null }))
+  }, [])
+  const popoutOpenPerson = useCallback((pid: string) => {
+    setPopout((prev) => ({ ...prev, personId: pid, jiraKey: null, taskId: null }))
+  }, [])
+  const popoutOpenTask = useCallback((taskSysId: string, changeSysId: string) => {
+    setPopoutChangeNumber(undefined)
+    setPopout({ id: changeSysId || null, taskId: taskSysId, jiraKey: null, personId: null })
+  }, [])
+  // Closing an overlay with no change beneath empties the nav — the dialog closes.
+  const popoutCloseJira = useCallback(() => {
+    setPopoutTab('jiras')
+    setPopout((prev) => ({ ...prev, jiraKey: null }))
+  }, [])
+  const popoutClosePerson = useCallback(() => {
+    setPopout((prev) => ({ ...prev, personId: null }))
+  }, [])
+  const popoutCloseTask = useCallback(() => {
+    setPopoutTab('tasks')
+    setPopout((prev) => ({ ...prev, taskId: null }))
+  }, [])
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
@@ -313,11 +449,6 @@ export default function App() {
 
   const listProps = { changes: visible, tasksByChange, selectedId, onOpen: selectChange }
 
-  // Where closing the Jira issue lands, stated on the issue's back affordance.
-  // changeNumber survives the change view unmounting, so it's still the number
-  // you came from; a deep-linked ?id=…&jira=… never loaded one, hence the fallback.
-  const jiraBackLabel = selectedId ? (changeNumber ?? 'Change') : 'Weekend activity'
-
   return (
     <div className="flex h-screen flex-col bg-background">
       <TopNav liveStatus={ambStatus} screen={screen} onScreenChange={selectScreen} />
@@ -339,9 +470,21 @@ export default function App() {
         <StatTiles stats={stats} />
       </header>
 
-      {/* Below the header: phase list and detail panel side by side, equal width. */}
-      <main data-diag="main" className="grid min-h-0 flex-1 grid-cols-2">
-        <section className="min-h-0 overflow-y-auto border-r border-border p-6">
+      {/* Below the header: phase list and detail panel side by side, equal width —
+          except in grid view, where the table claims the full width and manages
+          its own scroll (sticky header needs the scroll container inside it). */}
+      <main
+        data-diag="main"
+        className={cn('min-h-0 flex-1', view === 'grid' ? 'flex' : 'grid grid-cols-2')}
+      >
+        <section
+          className={cn(
+            'min-h-0',
+            view === 'grid'
+              ? 'flex flex-1 flex-col p-6'
+              : 'overflow-y-auto border-r border-border p-6',
+          )}
+        >
           {/* One toolbar row: everything that scopes this list lives here. */}
           <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
             {!loading && !error && stateTabs.length > 0 && (
@@ -381,6 +524,15 @@ export default function App() {
                   type on cream is 4.6:1; the -ink step is 6.2:1. */}
               <p className="max-w-md text-body-sm text-error-ink">{error}</p>
             </CenteredState>
+          ) : view === 'grid' ? (
+            <ChangeGridView
+              changes={visible}
+              tasksByChange={tasksByChange}
+              onOpenChange={popoutOpenChange}
+              onOpenJira={popoutOpenJira}
+              onOpenPerson={popoutOpenPerson}
+              onOpenTask={popoutOpenTask}
+            />
           ) : view === 'timeline' ? (
             <TimelineView
               changes={visible}
@@ -397,49 +549,97 @@ export default function App() {
           )}
         </section>
         {/*
-         * The detail pane shows exactly one thing, and a Jira issue OUTRANKS the
-         * change behind it — you opened the issue from the change, so it's the
-         * nearer record. It also paints in the foreign-system blue, which is why
-         * it can't simply be another tab inside ChangeDetailView: the whole point
-         * is that crossing into Jira is visible.
+         * The detail pane shows exactly one thing, and an overlay (Jira issue,
+         * person, task) OUTRANKS the change behind it — you opened it from the
+         * change, so it's the nearer record. RecordPane owns that precedence,
+         * shared with the grid's popout below.
+         *
+         * In grid view the pane isn't rendered at all — the selection survives in
+         * the URL, so flipping back to List restores whatever was open.
          */}
-        <section className="min-h-0 overflow-y-auto">
-          {jiraKey ? (
-            <JiraDetailView
-              service={jiraService}
-              amb={amb}
-              issueKey={jiraKey}
-              refreshKey={refreshKey}
-              backLabel={jiraBackLabel}
-              onBack={closeJira}
-              onOpenChange={selectChange}
-            />
-          ) : selectedId ? (
-            <ChangeDetailView
-              service={service}
-              jiraService={jiraService}
-              amb={amb}
-              sysId={selectedId}
-              refreshKey={refreshKey}
+        {view !== 'grid' && (
+          <section className="min-h-0 overflow-y-auto">
+            <RecordPane
+              nav={{ id: selectedId, jiraKey, personId, taskId }}
+              rootLabel="Weekend activity"
               tab={detailTab}
               onTabChange={setDetailTab}
-              onLoaded={setChangeNumber}
-              onBack={clearSelection}
-              onOpenJira={openJira}
-            />
-          ) : (
-            <ActivityFeed
-              events={feed.events}
-              loading={feed.loading}
-              error={feed.error}
+              changeNumber={changeNumber}
+              onChangeLoaded={setChangeNumber}
+              onTaskLoaded={setTaskNumber}
+              onPersonLoaded={setPersonName}
+              service={service}
+              jiraService={jiraService}
+              userService={userService}
+              amb={amb}
+              refreshKey={refreshKey}
               changes={changes}
               tasks={tasks}
-              onOpen={selectChange}
+              tasksByChange={tasksByChange}
+              onOpenChange={selectChange}
               onOpenJira={openJira}
+              onOpenPerson={openPerson}
+              onOpenTask={openTask}
+              onCloseJira={closeJira}
+              onClosePerson={closePerson}
+              onCloseTask={closeTask}
+              onBackFromChange={clearSelection}
+              resting={
+                <ActivityFeed
+                  events={feed.events}
+                  loading={feed.loading}
+                  error={feed.error}
+                  changes={changes}
+                  tasks={tasks}
+                  onOpen={selectChange}
+                  onOpenJira={openJira}
+                />
+              }
             />
-          )}
-        </section>
+          </section>
+        )}
       </main>
+
+      {/* The grid's popout: records opened from the grid peek here, over the
+          grid, instead of re-expanding the split layout. */}
+      <Dialog
+        open={popoutIsOpen}
+        onOpenChange={(open) => {
+          if (!open) closePopout()
+        }}
+      >
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-h-[85vh] max-w-4xl overflow-y-auto p-0"
+        >
+          <DialogTitle className="sr-only">Record detail</DialogTitle>
+          <RecordPane
+            nav={popout}
+            rootLabel="Grid"
+            tab={popoutTab}
+            onTabChange={setPopoutTab}
+            changeNumber={popoutChangeNumber}
+            onChangeLoaded={setPopoutChangeNumber}
+            service={service}
+            jiraService={jiraService}
+            userService={userService}
+            amb={amb}
+            refreshKey={refreshKey}
+            changes={changes}
+            tasks={tasks}
+            tasksByChange={tasksByChange}
+            onOpenChange={popoutOpenChange}
+            onOpenJira={popoutOpenJira}
+            onOpenPerson={popoutOpenPerson}
+            onOpenTask={popoutOpenTask}
+            onCloseJira={popoutCloseJira}
+            onClosePerson={popoutClosePerson}
+            onCloseTask={popoutCloseTask}
+            onBackFromChange={closePopout}
+            resting={null}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -476,12 +676,13 @@ function ViewToggle({
   view,
   onChange,
 }: {
-  view: 'list' | 'timeline'
-  onChange: (view: 'list' | 'timeline') => void
+  view: ViewKey
+  onChange: (view: ViewKey) => void
 }) {
   const options = [
     { key: 'list' as const, label: 'List', Icon: ListIcon },
     { key: 'timeline' as const, label: 'Timeline', Icon: CalendarRange },
+    { key: 'grid' as const, label: 'Grid', Icon: TableIcon },
   ]
   return (
     <div className="flex items-center gap-1">

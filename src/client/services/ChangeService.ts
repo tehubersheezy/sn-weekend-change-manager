@@ -102,6 +102,16 @@ export class ChangeService {
     return rows[0] ?? null
   }
 
+  /** A single change_task by sys_id — the only read that carries description. */
+  async getTask(sysId: string): Promise<TaskRecord | null> {
+    const params = new URLSearchParams({
+      sysparm_fields: `${TASK_FIELDS},description`,
+      sysparm_query: `sys_id=${sysId}`,
+    })
+    const rows = await this.query<TaskRecord>('change_task', params)
+    return rows[0] ?? null
+  }
+
   /** change_task rows for one change, ordered by planned start. */
   async listTasksForChange(changeSysId: string): Promise<TaskRecord[]> {
     const params = new URLSearchParams({

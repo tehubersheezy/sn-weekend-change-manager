@@ -14,6 +14,7 @@ import { Card } from './ui/card'
 import { Skeleton } from './ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { StateBadge } from './StateBadge'
+import { PersonBadge } from './PersonBadge'
 import { PlanCard } from './PlanCard'
 import { TaskList } from './TaskList'
 import { CiList } from './CiList'
@@ -31,8 +32,11 @@ export function ChangeDetailView({
   tab,
   onTabChange,
   onLoaded,
+  backLabel = 'Weekend activity',
   onBack,
   onOpenJira,
+  onOpenTask,
+  onOpenPerson,
 }: {
   service: ChangeService
   jiraService: JiraService
@@ -47,10 +51,16 @@ export function ChangeDetailView({
   tab: DetailTab
   onTabChange: (tab: DetailTab) => void
   onLoaded?: (changeNumber: string) => void
-  /** Return to the pane's resting view (the weekend activity feed). */
+  /** What the back affordance names — the feed in the pane, the grid in a popout. */
+  backLabel?: string
+  /** Return to the surface's resting view (feed), or close the popout. */
   onBack?: () => void
-  /** Open a Jira issue in this pane. The change stays selected behind it. */
+  /** Open a Jira issue in this surface. The change stays selected behind it. */
   onOpenJira: (key: string) => void
+  /** Open a change task's own page in this surface. */
+  onOpenTask?: (taskSysId: string, changeSysId: string) => void
+  /** Open a person's page in this surface. */
+  onOpenPerson?: (personSysId: string) => void
 }) {
   const [change, setChange] = useState<ChangeRecord | null>(null)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
@@ -127,7 +137,7 @@ export function ChangeDetailView({
             onClick={onBack}
           >
             <ArrowLeft />
-            Weekend activity
+            {backLabel}
           </Button>
         </div>
       )}
@@ -159,7 +169,18 @@ export function ChangeDetailView({
                 <Badge variant="pill">Priority: {display(change.priority)}</Badge>
               )}
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-caption text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-caption text-muted-foreground">
+              {/* The person on the hook is a record — a badge that opens them —
+                  not a string. Unassigned stays plain text: no dead buttons. */}
+              {value(change.assigned_to) && onOpenPerson ? (
+                <PersonBadge
+                  name={display(change.assigned_to) || 'Unknown'}
+                  size="sm"
+                  onOpen={() => onOpenPerson(value(change.assigned_to))}
+                />
+              ) : (
+                <span>{display(change.assigned_to) || 'Unassigned'}</span>
+              )}
               <span>{display(change.assignment_group) || 'No assignment group'}</span>
               <span>
                 {formatDateTime(start)} → {formatDateTime(end)} ET
@@ -232,7 +253,7 @@ export function ChangeDetailView({
             </TabsContent>
 
             <TabsContent value="tasks">
-              <TaskList tasks={tasks} />
+              <TaskList tasks={tasks} onOpenTask={onOpenTask} onOpenPerson={onOpenPerson} />
             </TabsContent>
 
             <TabsContent value="cis">

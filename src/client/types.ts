@@ -48,4 +48,7 @@ export interface TaskRecord {
   change_request: SnField
   /** Jira issue key (e.g. NET-4821). */
   correlation_display: SnField
+  /** Only populated by ChangeService.getTask — the window-wide task query
+      deliberately skips it (242 rows × a text blob nobody reads in a list). */
+  description?: SnField
 }
