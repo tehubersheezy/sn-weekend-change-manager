@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ActivityService, FeedEvent } from '../services/ActivityService'
 import type { ChangeRecord, TaskRecord } from '../types'
-import { value } from '../utils/fields'
+import type { WeekendWindow } from '../utils/weekendWindow'
 
 /**
  * Owns the weekend activity stream. No AMB subscription of its own: any
@@ -10,9 +10,14 @@ import { value } from '../utils/fields'
  * reload — and the fresh `changes`/`tasks` identities re-run this effect. The
  * first load (and window/refresh reloads, where `ready` drops) shows the
  * loading state; identity-only reloads refetch silently in place.
+ *
+ * `changes` and `tasks` are the live-refresh TRIGGER, not the query: the server
+ * derives the feed's population from the window itself, re-deriving which records
+ * the caller is allowed to see on every call.
  */
 export function useActivityFeed(
     service: ActivityService,
+    weekend: WeekendWindow,
     changes: ChangeRecord[],
     tasks: TaskRecord[],
     ready: boolean,
@@ -33,9 +38,8 @@ export function useActivityFeed(
             return
         }
         const seq = ++seqRef.current
-        const ids = [...changes, ...tasks].map((r) => value(r.sys_id)).filter(Boolean)
         service
-            .listActivity(ids)
+            .listActivity(weekend)
             .then((rows) => {
                 if (seq !== seqRef.current) return // a newer fetch superseded this one
                 setEvents(rows)
@@ -52,7 +56,7 @@ export function useActivityFeed(
                     setLoading(false)
                 }
             })
-    }, [service, changes, tasks, ready])
+    }, [service, weekend, changes, tasks, ready])
 
     return { events, loading, error }
 }

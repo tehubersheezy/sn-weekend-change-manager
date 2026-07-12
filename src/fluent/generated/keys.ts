@@ -5,6 +5,22 @@ declare global {
         namespace Internal {
             interface Keys extends KeysRegistry {
                 explicit: {
+                    'activity-rest-api': {
+                        table: 'sys_ws_definition'
+                        id: '4115caf0c59f490bb0d4d5744efe5f83'
+                    }
+                    'activity-rest-events': {
+                        table: 'sys_ws_operation'
+                        id: '6352bb2c852d492887f8f439de33353f'
+                    }
+                    'activity-rest-events-from': {
+                        table: 'sys_ws_query_parameter'
+                        id: '2293c53185954fc8a1013b1c7f20fa01'
+                    }
+                    'activity-rest-events-to': {
+                        table: 'sys_ws_query_parameter'
+                        id: '49f6ab63f56e4fb29ef02e6c06e024dc'
+                    }
                     bom_json: {
                         table: 'sys_module'
                         id: '05d0f0987a3844f4836d063ae4b93974'
@@ -29,6 +45,10 @@ declare global {
                         table: 'sys_module'
                         id: '3163c485bfc64b8c83ab3e16ab20cd5c'
                     }
+                    src_server_activity_ts: {
+                        table: 'sys_module'
+                        id: 'c94e7a70fe084ff3928761ccaa1f07fc'
+                    }
                     src_server_jira_ts: {
                         table: 'sys_module'
                         id: 'e765eb54cebf40a2ac1ad5b1cd2ffab2'
@@ -44,6 +64,26 @@ declare global {
                     weekend_change_module_console: {
                         table: 'sys_app_module'
                         id: 'fc188ad8cd3e403e8069a11e7cc639cd'
+                    }
+                    'xscope-read-change-request': {
+                        table: 'sys_scope_privilege'
+                        id: '271902f26f734773b4f59c06413818e8'
+                    }
+                    'xscope-read-change-task': {
+                        table: 'sys_scope_privilege'
+                        id: '0e50271aaf9c4670a959fed5a91b4078'
+                    }
+                    'xscope-read-sys-audit': {
+                        table: 'sys_scope_privilege'
+                        id: '98718c38fdb0425fa9a1d3f259689045'
+                    }
+                    'xscope-read-sys-journal-field': {
+                        table: 'sys_scope_privilege'
+                        id: 'dfc9dc15a10f44df8e55d5f9624906be'
+                    }
+                    'xscope-read-sys-user': {
+                        table: 'sys_scope_privilege'
+                        id: '69ca371ebb79467bbe28bc8d124c5ec7'
                     }
                 }
                 composite: [
@@ -326,6 +366,14 @@ declare global {
                         }
                     },
                     {
+                        table: 'sys_ws_query_parameter_map'
+                        id: 'bc115a31d7434865bb0eb58445795e5b'
+                        key: {
+                            web_service_operation: '6352bb2c852d492887f8f439de33353f'
+                            web_service_query_parameter: '49f6ab63f56e4fb29ef02e6c06e024dc'
+                        }
+                    },
+                    {
                         table: 'sn_glider_source_artifact_m2m'
                         id: 'c070c0719a464db080f129956d637499'
                         deleted: true
@@ -370,6 +418,14 @@ declare global {
                         id: 'e390b1b58608454dab3ba9fda8d47576'
                         key: {
                             name: 'x_912401_weekend_c/vendor-react-dom--38182f1b.js.map'
+                        }
+                    },
+                    {
+                        table: 'sys_ws_query_parameter_map'
+                        id: 'f7aa4520e37041c39f6bee90d5c3c6f3'
+                        key: {
+                            web_service_operation: '6352bb2c852d492887f8f439de33353f'
+                            web_service_query_parameter: '2293c53185954fc8a1013b1c7f20fa01'
                         }
                     },
                     {

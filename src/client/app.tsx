@@ -130,7 +130,7 @@ export default function App() {
   // survives detail navigation — coming back from a change is instant. Live
   // refresh piggybacks on the arrays' identity, which the AMB watchers renew.
   const activityService = useMemo(() => new ActivityService(), [])
-  const feed = useActivityFeed(activityService, changes, tasks, !loading && !error)
+  const feed = useActivityFeed(activityService, weekendWindow, changes, tasks, !loading && !error)
 
   // Shared by the feed and the detail pane's Jiras tab so a key is resolved once.
   const jiraService = useMemo(() => new JiraService(), [])
