@@ -197,6 +197,7 @@ declare global {
                     {
                         table: 'sys_ux_lib_asset'
                         id: '1c44202c4a0e4a91b3abf0e2c3248110'
+                        deleted: true
                         key: {
                             name: 'x_912401_weekend_c/node.browser-0Yo33bIn.js.map'
                         }
@@ -204,6 +205,7 @@ declare global {
                     {
                         table: 'sys_ux_lib_asset'
                         id: '248f6994cf8141bb877beed17675360a'
+                        deleted: true
                         key: {
                             name: 'x_912401_weekend_c/node.browser-0Yo33bIn'
                         }
