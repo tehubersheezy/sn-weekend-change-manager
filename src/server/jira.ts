@@ -78,9 +78,6 @@ const JIRA_API = '/rest/api/2'
 /** Outbound call ceiling. A weekend operator waits on this synchronously. */
 const HTTP_TIMEOUT_MS = 15000
 
-/** Most comments we render on one issue, newest-biased (we keep the last N). */
-const COMMENT_LIMIT = 50
-
 /** The only fields a summary needs. Asking for more would just cost payload. */
 const SUMMARY_FIELDS = 'summary,issuetype,status,priority,assignee'
 
@@ -1094,7 +1091,14 @@ function readLabels(value: any): string[] {
 }
 
 /**
- * Comments, oldest first, capped at the most recent COMMENT_LIMIT.
+ * EVERY comment on the issue, oldest first. No cap.
+ *
+ * There used to be one (the most recent 50), and it was wrong for the only consumer
+ * this field has. The AI report reads a blocking issue's thread to explain why a
+ * change failed, and the explanation is not reliably in the newest comments — a
+ * dependency that sank a Saturday change is often argued out weeks earlier, in the
+ * middle of the thread. A cap that keeps the tail keeps the small talk and drops
+ * the cause. If an issue's thread is long, that length is itself the signal.
  *
  * `body` is a plain string because this is REST v2. On v3 it would be an ADF
  * document — an object tree — and this line would silently render '[object
@@ -1105,8 +1109,7 @@ function readComments(comment: any): JiraComment[] {
     const raw = comment && Array.isArray(comment.comments) ? comment.comments : null
     if (!raw) return comments
 
-    const start = raw.length > COMMENT_LIMIT ? raw.length - COMMENT_LIMIT : 0
-    for (let i = start; i < raw.length; i++) {
+    for (let i = 0; i < raw.length; i++) {
         const entry = raw[i]
         if (!entry) continue
         comments.push({
@@ -1142,8 +1145,9 @@ function mapSummary(raw: any): JiraIssueSummary | null {
 
 /**
  * A search hit -> the shape the AI report reads. Same mapping as a summary, plus
- * the issue's own words. readComments() already keeps only the newest
- * COMMENT_LIMIT, so a decade-old issue cannot blow up one weekend's payload.
+ * the issue's own words: the WHOLE description and EVERY comment, uncapped. The
+ * report's job is to explain why a change failed, and that explanation is routinely
+ * buried mid-thread on the issue that blocked it — see readComments().
  */
 function mapNarrative(raw: any): JiraIssueNarrative | null {
     const summary = mapSummary(raw)

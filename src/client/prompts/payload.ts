@@ -449,23 +449,27 @@ function renderChange(change: PayloadChange): string {
 }
 
 /**
- * Per-issue caps on the Jira half. The server already keeps only the newest 50
- * comments; these bound what reaches the model, because a weekend can name twenty
- * issues and one of them can be a two-year-old epic with a hundred replies.
+ * THE JIRA HALF IS NOT CAPPED. Not the description, not the comment count, not a
+ * comment's body — the model gets every word.
  *
- * Every cut says so in the text. A model cannot tell a truncated thread from a
- * quiet one, and "nobody followed up on this issue" is exactly the kind of
- * confident, false sentence a post-implementation review must never contain.
+ * There were three caps here (1200 chars of description, the newest 10 comments,
+ * 700 chars each) and they were a false economy. The report reads a blocking issue's
+ * thread to answer WHY a change failed, and that answer is not reliably in the last
+ * ten comments or the first 700 characters: the argument that sank a Saturday change
+ * is often had weeks earlier, mid-thread, at length. Truncation kept the small talk
+ * and dropped the cause — while ANNOUNCING that it had done so, which merely told
+ * the model to be uncertain about the very passage it needed.
+ *
+ * What this costs is context, and context is the thing we have. A weekend names ~20
+ * issues; even a chatty one is a few thousand tokens against a window that holds the
+ * whole console's payload comfortably. What it buys is a review that can quote the
+ * comment that actually explains the failure.
+ *
+ * The truncation NOTICE machinery is gone with the caps, deliberately. Half a
+ * safeguard is worse than none: a payload that sometimes says "truncated" trains the
+ * model to hedge everywhere. The activity feed still caps (FEED_LIMIT) and still
+ * says so via `historyTruncated` — that one is a real limit, on a real query.
  */
-const JIRA_DESCRIPTION_CHARS = 1200
-const JIRA_COMMENTS_SHOWN = 10
-const JIRA_COMMENT_CHARS = 700
-
-function clip(body: string, max: number): string {
-  const trimmed = body.trim()
-  if (trimmed.length <= max) return trimmed
-  return `${trimmed.slice(0, max).trimEnd()} […${trimmed.length - max} more characters, truncated]`
-}
 
 /** Keep a multi-line body inside its bullet instead of breaking the list. */
 function indent(body: string): string {
@@ -486,18 +490,13 @@ function renderJira(jira: PayloadJira): string {
   if (bits.length) out.push(`  ${bits.join(' · ')}`)
   if (jira.referencedBy.length) out.push(`  referenced by: ${jira.referencedBy.join(', ')}`)
   if (jira.description) {
-    out.push(`  description: ${indent(clip(jira.description, JIRA_DESCRIPTION_CHARS))}`)
+    out.push(`  description: ${indent(jira.description.trim())}`)
   }
 
-  const shown = jira.comments.slice(-JIRA_COMMENTS_SHOWN)
-  const omitted = jira.comments.length - shown.length
-  if (shown.length) {
-    const note = omitted ? `, ${omitted} older not shown` : ''
-    out.push(`  comments (${jira.comments.length}${note}, oldest first):`)
-    for (const comment of shown) {
-      out.push(
-        `  · ${comment.author}, ${comment.when}: ${indent(clip(comment.body, JIRA_COMMENT_CHARS))}`,
-      )
+  if (jira.comments.length) {
+    out.push(`  comments (${jira.comments.length}, oldest first, complete):`)
+    for (const comment of jira.comments) {
+      out.push(`  · ${comment.author}, ${comment.when}: ${indent(comment.body.trim())}`)
     }
   }
 
