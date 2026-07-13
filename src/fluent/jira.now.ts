@@ -51,7 +51,7 @@ RestApi({
             path: '/issues',
             script: listIssues,
             shortDescription:
-                'Batch issue summaries for a set of Jira keys — lists and badges.',
+                'Batch issues for a set of Jira keys — lists, badges, and the AI report.',
             parameters: [
                 {
                     $id: Now.ID['jira-rest-issues-keys'],
@@ -59,6 +59,14 @@ RestApi({
                     required: true,
                     exampleValue: 'NET-4451,SEC-3319',
                     shortDescription: 'Comma-separated Jira issue keys.',
+                },
+                {
+                    $id: Now.ID['jira-rest-issues-detail'],
+                    name: 'detail',
+                    required: false,
+                    exampleValue: 'full',
+                    shortDescription:
+                        'full = also return each issue’s description and comment thread, for the AI report. Omit for badges.',
                 },
             ],
             headers: [

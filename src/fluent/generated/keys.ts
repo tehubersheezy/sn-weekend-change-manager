@@ -54,6 +54,10 @@ declare global {
                         table: 'sys_ws_operation'
                         id: 'f5470b55e4804677a55da7ab59991601'
                     }
+                    'jira-rest-issues-detail': {
+                        table: 'sys_ws_query_parameter'
+                        id: 'fc6e2fb224a8435687353ceebb05e10f'
+                    }
                     'jira-rest-issues-keys': {
                         table: 'sys_ws_query_parameter'
                         id: 'b0af7975d4934246869810058f8994ba'
@@ -236,11 +240,27 @@ declare global {
                         }
                     },
                     {
+                        table: 'sys_ws_query_parameter_map'
+                        id: '2cbcdf52a41a42bcbdbd92de677815df'
+                        key: {
+                            web_service_operation: 'f5470b55e4804677a55da7ab59991601'
+                            web_service_query_parameter: 'fc6e2fb224a8435687353ceebb05e10f'
+                        }
+                    },
+                    {
                         table: 'sn_glider_source_artifact_m2m'
                         id: '2e96d2f47e0c43419de5e1c3c610a992'
+                        deleted: true
                         key: {
                             application_file: 'fe83cdf987e842e28ad1139ede7841c4'
                             source_artifact: 'bc060fadf8e54293a39439ed0da26f47'
+                        }
+                    },
+                    {
+                        table: 'sys_ux_lib_asset'
+                        id: '3752d8b838a34b148e8978a54db6dda6'
+                        key: {
+                            name: 'x_912401_weekend_c/vendor-lucide-react--66695cc0'
                         }
                     },
                     {
@@ -366,6 +386,14 @@ declare global {
                         key: {
                             web_service_operation: 'f02bd044b0254db18a5a846c65cf8cb2'
                             web_service_header: 'deac2220a6ee46d6bd74c4d2cc7b7fa2'
+                        }
+                    },
+                    {
+                        table: 'sys_ux_lib_asset'
+                        id: '6844b5294fa5466a8b9c2e051686da79'
+                        deleted: true
+                        key: {
+                            name: 'x_912401_weekend_c/node.browser-NtKmHiIs.js.map'
                         }
                     },
                     {
@@ -550,6 +578,22 @@ declare global {
                         }
                     },
                     {
+                        table: 'sys_ux_lib_asset'
+                        id: 'be219f4ab0d6496d918e5e160ccf89c5'
+                        deleted: true
+                        key: {
+                            name: 'x_912401_weekend_c/node.browser-NtKmHiIs'
+                        }
+                    },
+                    {
+                        table: 'sn_glider_source_artifact_m2m'
+                        id: 'bfd9895c25ad4663af888de94c9b160a'
+                        key: {
+                            application_file: 'f70dac4482314627b711c02a89b84eb5'
+                            source_artifact: 'bc060fadf8e54293a39439ed0da26f47'
+                        }
+                    },
+                    {
                         table: 'sn_glider_source_artifact_m2m'
                         id: 'c070c0719a464db080f129956d637499'
                         deleted: true
@@ -599,6 +643,14 @@ declare global {
                         }
                     },
                     {
+                        table: 'sn_glider_source_artifact_m2m'
+                        id: 'dc622a2cf8084a2d99bd6491f77b287e'
+                        key: {
+                            application_file: '3752d8b838a34b148e8978a54db6dda6'
+                            source_artifact: 'bc060fadf8e54293a39439ed0da26f47'
+                        }
+                    },
+                    {
                         table: 'sys_ux_lib_asset'
                         id: 'e390b1b58608454dab3ba9fda8d47576'
                         deleted: true
@@ -617,8 +669,16 @@ declare global {
                     {
                         table: 'sys_ux_lib_asset'
                         id: 'f19996562bdf4572ae176b462dae8787'
+                        deleted: true
                         key: {
                             name: 'x_912401_weekend_c/vendor-lucide-react--16f3086a.js.map'
+                        }
+                    },
+                    {
+                        table: 'sys_ux_lib_asset'
+                        id: 'f70dac4482314627b711c02a89b84eb5'
+                        key: {
+                            name: 'x_912401_weekend_c/vendor-lucide-react--66695cc0.js.map'
                         }
                     },
                     {
@@ -641,6 +701,7 @@ declare global {
                     {
                         table: 'sn_glider_source_artifact_m2m'
                         id: 'f9f550769dba4c949cfa59e57cfff46c'
+                        deleted: true
                         key: {
                             application_file: 'f19996562bdf4572ae176b462dae8787'
                             source_artifact: 'bc060fadf8e54293a39439ed0da26f47'
@@ -664,6 +725,7 @@ declare global {
                     {
                         table: 'sys_ux_lib_asset'
                         id: 'fe83cdf987e842e28ad1139ede7841c4'
+                        deleted: true
                         key: {
                             name: 'x_912401_weekend_c/vendor-lucide-react--16f3086a'
                         }

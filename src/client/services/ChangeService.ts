@@ -73,12 +73,20 @@ export function weekendChangeQuery(window: WeekendWindow): string {
  * on them — a task belongs to the weekend iff its parent change_request does.
  * Dot-walk through the change_request reference and apply the exact parent
  * predicate from weekendChangeQuery. One call, no fan-out over parent sys_ids.
+ *
+ * The trailing `state!=4` is the TASK's own state, not the parent's. The parent
+ * predicate only drops tasks whose whole change was canceled; a task canceled on
+ * a change that is still going is just as much not-weekend-workload, and without
+ * this it counted toward the tabs, the timeline and the Jira key set. Canceled is
+ * 4 on both tables (see utils/stateLabels) — the collision is a coincidence, so
+ * do not "simplify" the two terms into one.
  */
 export function weekendTaskQuery(window: WeekendWindow): string {
   return (
     `change_request.start_date<=${window.endUtc}` +
     `^change_request.end_date>=${window.startUtc}` +
-    `^change_request.state!=4^change_request.state!=-5`
+    `^change_request.state!=4^change_request.state!=-5` +
+    `^state!=4`
   )
 }
 
@@ -119,11 +127,11 @@ export class ChangeService {
     return rows[0] ?? null
   }
 
-  /** change_task rows for one change, ordered by planned start. */
+  /** change_task rows for one change, ordered by planned start. Canceled excluded, as everywhere. */
   async listTasksForChange(changeSysId: string): Promise<TaskRecord[]> {
     const params = new URLSearchParams({
       sysparm_fields: TASK_FIELDS,
-      sysparm_query: `change_request=${changeSysId}^ORDERBYplanned_start_date`,
+      sysparm_query: `change_request=${changeSysId}^state!=4^ORDERBYplanned_start_date`,
     })
     return this.query<TaskRecord>('change_task', params)
   }

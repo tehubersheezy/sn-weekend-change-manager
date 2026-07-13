@@ -7,7 +7,7 @@ import { useAmbClient } from './hooks/useAmb'
 import { useWeekendChanges } from './hooks/useWeekendChanges'
 import { useActivityFeed } from './hooks/useActivityFeed'
 import { useWeekendCis } from './hooks/useWeekendCis'
-import { useJiraSummaries } from './hooks/useJiraSummaries'
+import { useJiraNarratives } from './hooks/useJiraNarratives'
 import { LlmService } from './services/LlmService'
 import { buildPayload } from './prompts'
 import { AiReportDialog } from './components/AiReportDialog'
@@ -271,10 +271,17 @@ export default function App() {
   const llmService = useMemo(() => new LlmService(llmConfig), [llmConfig])
 
   // The two reads the console doesn't otherwise do window-wide. Both feed findings
-  // that are invisible per-change: CI collisions, and whether a change's Jira is Done.
+  // that are invisible per-change: CI collisions, and what a change's Jira actually
+  // says — its status, its description, and what people wrote on it.
+  //
+  // The Jira read is gated on `aiOpen` because it is the expensive one and nothing
+  // on screen consumes it: no list surface renders a description or a comment
+  // thread. Fetching them eagerly would put a synchronous Jira callout, for every
+  // key in the weekend, in front of every page load — including the majority that
+  // never open the report. It fires when the report does, and the report waits.
   const cis = useWeekendCis(service, changes)
   const jiraKeys = useMemo(() => jiraIssuesFromTasks(tasks).map((i) => i.key), [tasks])
-  const jiraSummaries = useJiraSummaries(jiraService, jiraKeys)
+  const jira = useJiraNarratives(jiraService, jiraKeys, aiOpen)
 
   const payload = useMemo(
     () =>
@@ -285,9 +292,9 @@ export default function App() {
         tasks,
         cis,
         events: feed.events,
-        jiraSummaries,
+        jiraIssues: jira.issues,
       }),
-    [weekendWindow, windowConfig.timeZone, changes, tasks, cis, feed.events, jiraSummaries],
+    [weekendWindow, windowConfig.timeZone, changes, tasks, cis, feed.events, jira.issues],
   )
 
   const updateWindowConfig = useCallback((next: WindowConfig) => {
@@ -787,12 +794,14 @@ export default function App() {
       </Dialog>
 
       {/* The weekend report. Generates on open against the current phase's question
-          and the whole window's payload; aborts on close. */}
+          and the whole window's payload; aborts on close. `payloadPending` holds it
+          until the Jira read this open triggered has landed — see useJiraNarratives. */}
       <AiReportDialog
         open={aiOpen}
         onOpenChange={setAiOpen}
         screen={phase.key}
         payload={payload}
+        payloadPending={jira.loading}
         service={llmService}
       />
     </div>

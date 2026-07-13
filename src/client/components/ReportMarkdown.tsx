@@ -1,149 +1,138 @@
+import type { ComponentPropsWithoutRef, JSX } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { cn } from '../lib/utils'
 
 /**
- * The narrow slice of Markdown the weekend reports actually emit.
+ * The weekend reports, rendered.
  *
- * Not a general Markdown engine, and deliberately not a dependency. The prompts
- * constrain the model to prose, headings, bullets and bold ("Write in prose and
- * lists. No tables."), so the grammar here is the grammar the reports use —
- * anything wider would be untested surface area shipped into a ServiceNow bundle.
+ * This was a hand-rolled parser until tables arrived, and the reason it stopped
+ * being one is worth keeping: the source here is a LANGUAGE MODEL, not a fixed
+ * corpus. The grammar is constrained by a prompt, and a prompt is advisory — the
+ * model will eventually emit a nested list, an escaped pipe, a ragged row, or a
+ * code fence nobody asked for. A hand-rolled parser degrades silently and badly on
+ * syntax it did not anticipate (its paragraph branch JOINS consecutive lines, so a
+ * pipe table did not render badly — it rendered as one run-on line of pipes). remark
+ * degrades gracefully. That is the whole trade, and it is why the dependency is here.
  *
- * NO CODE BLOCKS, NO INLINE CODE, NO MONOSPACE. That is not an omission: this
- * system has no mono face (DESIGN.md, and Abey's standing preference), and a
- * report full of change numbers is exactly where a naive renderer would reach for
- * one. Record numbers are prose here, set in the sans face like everything else.
+ * NO MONOSPACE — AND THAT IS NOW THIS FILE'S JOB TO ENFORCE. A stock Markdown
+ * renderer reaches for a mono face on `code` and fenced blocks by default. This
+ * system has no mono face at all (DESIGN.md; Abey's standing preference), and a
+ * report full of change numbers is exactly where a model reaches for backticks. So
+ * `code` and `pre` below are overridden to the sans stack ON PURPOSE. Deleting those
+ * two overrides does not cause an error — it silently ships monospace.
+ *
+ * Raw HTML is NOT enabled (no `rehype-raw`). LLM output rendering inside a
+ * ServiceNow page has no business carrying markup, and leaving the path closed is
+ * cheaper than sanitizing an open one.
+ *
+ * Alignment in tables is the MODEL's to declare, via the GFM delimiter row (`--:`),
+ * and remark hands it through as a `style` prop that the cells below simply pass on.
+ * The prompts ask for `--:` on count columns; combined with `tabular-nums`, that is
+ * how digits line up without the mono face this system refuses to have.
  */
 
-/** Bold spans, and nothing else. The reports use `**` for emphasis and no other inline mark. */
-function inline(text: string, keyPrefix: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => {
-    const bold = /^\*\*[^*]+\*\*$/.test(part)
-    return bold ? (
-      <strong key={`${keyPrefix}-${i}`} className="font-medium text-ink">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={`${keyPrefix}-${i}`}>{part}</span>
-    )
-  })
-}
-
-type Block =
-  | { kind: 'heading'; level: number; text: string }
-  | { kind: 'list'; ordered: boolean; items: string[] }
-  | { kind: 'para'; text: string }
-
-/**
- * Group lines into blocks. Consecutive list lines coalesce into one list — the
- * alternative (a <ul> per bullet) is what makes hand-rolled renderers produce
- * that telltale broken-spacing look.
- */
-function parse(source: string): Block[] {
-  const blocks: Block[] = []
-  const lines = source.replace(/\r\n/g, '\n').split('\n')
-
-  let para: string[] = []
-  let list: { ordered: boolean; items: string[] } | null = null
-
-  const flushPara = () => {
-    if (para.length) blocks.push({ kind: 'para', text: para.join(' ') })
-    para = []
-  }
-  const flushList = () => {
-    if (list) blocks.push({ kind: 'list', ...list })
-    list = null
-  }
-  const flushAll = () => {
-    flushPara()
-    flushList()
-  }
-
-  for (const raw of lines) {
-    const line = raw.trim()
-
-    if (!line) {
-      flushAll()
-      continue
-    }
-
-    const heading = /^(#{1,4})\s+(.*)$/.exec(line)
-    if (heading) {
-      flushAll()
-      blocks.push({ kind: 'heading', level: heading[1].length, text: heading[2] })
-      continue
-    }
-
-    const bullet = /^[-*•]\s+(.*)$/.exec(line)
-    const numbered = /^\d+[.)]\s+(.*)$/.exec(line)
-    if (bullet || numbered) {
-      flushPara()
-      const ordered = Boolean(numbered)
-      // A switch between bullets and numbers starts a new list rather than
-      // silently absorbing one into the other.
-      if (!list || list.ordered !== ordered) {
-        flushList()
-        list = { ordered, items: [] }
-      }
-      list.items.push((bullet ?? numbered)![1])
-      continue
-    }
-
-    flushList()
-    para.push(line)
-  }
-  flushAll()
-
-  return blocks
-}
+type Props<T extends keyof JSX.IntrinsicElements> = ComponentPropsWithoutRef<T>
 
 export function ReportMarkdown({ source, className }: { source: string; className?: string }) {
-  const blocks = parse(source)
-
   return (
-    <div className={cn('flex flex-col gap-4', className)}>
-      {blocks.map((block, i) => {
-        if (block.kind === 'heading') {
+    <div className={cn('flex flex-col gap-4 text-body-sm text-body-text', className)}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
           // The serif is the display voice and belongs to headlines only. A report
           // section head is a headline; a list item is not.
-          return (
-            <h3
-              key={i}
-              className={cn(
-                'font-display text-ink',
-                block.level <= 2 ? 'text-display-xs' : 'text-body-md font-medium',
-                i > 0 && 'mt-2',
-              )}
-            >
-              {block.text}
-            </h3>
-          )
-        }
+          h1: ({ className: c, ...p }: Props<'h1'>) => (
+            <h3 className={cn('font-display text-display-xs text-ink', c)} {...p} />
+          ),
+          h2: ({ className: c, ...p }: Props<'h2'>) => (
+            <h3 className={cn('font-display text-display-xs text-ink', c)} {...p} />
+          ),
+          h3: ({ className: c, ...p }: Props<'h3'>) => (
+            <h4 className={cn('text-body-md font-medium text-ink', c)} {...p} />
+          ),
+          h4: ({ className: c, ...p }: Props<'h4'>) => (
+            <h4 className={cn('text-body-md font-medium text-ink', c)} {...p} />
+          ),
 
-        if (block.kind === 'list') {
-          const List = block.ordered ? 'ol' : 'ul'
-          return (
-            <List
-              key={i}
-              className={cn(
-                'flex flex-col gap-2 pl-5 text-body-sm text-body-text',
-                block.ordered ? 'list-decimal' : 'list-disc',
-              )}
-            >
-              {block.items.map((item, j) => (
-                <li key={j} className="pl-1 marker:text-muted-foreground">
-                  {inline(item, `${i}-${j}`)}
-                </li>
-              ))}
-            </List>
-          )
-        }
+          p: ({ className: c, ...p }: Props<'p'>) => (
+            <p className={cn('text-body-sm leading-relaxed text-body-text', c)} {...p} />
+          ),
+          strong: ({ className: c, ...p }: Props<'strong'>) => (
+            <strong className={cn('font-medium text-ink', c)} {...p} />
+          ),
+          em: ({ className: c, ...p }: Props<'em'>) => (
+            <em className={cn('italic', c)} {...p} />
+          ),
 
-        return (
-          <p key={i} className="text-body-sm leading-relaxed text-body-text">
-            {inline(block.text, String(i))}
-          </p>
-        )
-      })}
+          ul: ({ className: c, ...p }: Props<'ul'>) => (
+            <ul className={cn('flex flex-col gap-2 pl-5 list-disc', c)} {...p} />
+          ),
+          ol: ({ className: c, ...p }: Props<'ol'>) => (
+            <ol className={cn('flex flex-col gap-2 pl-5 list-decimal', c)} {...p} />
+          ),
+          li: ({ className: c, ...p }: Props<'li'>) => (
+            <li className={cn('pl-1 marker:text-muted-foreground', c)} {...p} />
+          ),
+
+          // A table can outgrow the detail pane, which is half the viewport. Scroll
+          // it rather than letting it push the report's own column wider.
+          table: ({ className: c, ...p }: Props<'table'>) => (
+            <div className="overflow-x-auto">
+              <table
+                className={cn('w-full border-collapse text-left text-body-sm', c)}
+                {...p}
+              />
+            </div>
+          ),
+          thead: ({ className: c, ...p }: Props<'thead'>) => (
+            <thead className={cn('border-b border-border', c)} {...p} />
+          ),
+          th: ({ className: c, ...p }: Props<'th'>) => (
+            <th
+              className={cn(
+                'px-3 py-2 text-body-sm font-medium text-muted-foreground tabular-nums',
+                c,
+              )}
+              {...p}
+            />
+          ),
+          // Hairline rules between rows, no zebra fill and no shadow — DESIGN.md.
+          tr: ({ className: c, ...p }: Props<'tr'>) => (
+            <tr className={cn('border-b border-hairline-soft last:border-0', c)} {...p} />
+          ),
+          td: ({ className: c, ...p }: Props<'td'>) => (
+            <td className={cn('px-3 py-2 align-top text-body-text tabular-nums', c)} {...p} />
+          ),
+
+          a: ({ className: c, ...p }: Props<'a'>) => (
+            <a className={cn('text-ink underline underline-offset-2', c)} {...p} />
+          ),
+          blockquote: ({ className: c, ...p }: Props<'blockquote'>) => (
+            <blockquote
+              className={cn('border-l-2 border-border pl-3 text-muted-foreground', c)}
+              {...p}
+            />
+          ),
+          hr: ({ className: c, ...p }: Props<'hr'>) => (
+            <hr className={cn('border-0 border-t border-border', c)} {...p} />
+          ),
+
+          // See the header: these two exist to KEEP THE MONO FACE OUT. They are not
+          // styling niceties, they are the enforcement of a hard system rule.
+          code: ({ className: c, ...p }: Props<'code'>) => (
+            <span className={cn('text-ink', c)} {...p} />
+          ),
+          // A <pre> is swapped for a <div> rather than restyled, because the mono
+          // face on <pre> is a browser UA default, not a class we could override.
+          // Only children cross over: <pre>'s own handler types are element-specific.
+          pre: ({ className: c, children }: Props<'pre'>) => (
+            <div className={cn('whitespace-pre-wrap text-body-text', c)}>{children}</div>
+          ),
+        }}
+      >
+        {source}
+      </ReactMarkdown>
     </div>
   )
 }

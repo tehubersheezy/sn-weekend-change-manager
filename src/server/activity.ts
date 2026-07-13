@@ -129,12 +129,18 @@ function weekendChangeQuery(from: string, to: string): string {
  * Mirrors weekendTaskQuery(). A change_task's OWN planned dates are frequently
  * empty, so a task belongs to the weekend iff its parent change does — same
  * predicate, dot-walked through the parent reference.
+ *
+ * The trailing state!=4 is the TASK's own state: the parent predicate only drops
+ * tasks whose whole change was canceled, and a task canceled on a live change is
+ * not weekend workload either. It must match the client's weekendTaskQuery
+ * exactly or the feed scopes to a different population than the list it annotates.
  */
 function weekendTaskQuery(from: string, to: string): string {
     return (
         'change_request.start_date<=' + to +
         '^change_request.end_date>=' + from +
-        '^change_request.state!=4^change_request.state!=-5'
+        '^change_request.state!=4^change_request.state!=-5' +
+        '^state!=4'
     )
 }
 

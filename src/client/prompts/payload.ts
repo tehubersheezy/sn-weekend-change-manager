@@ -1,6 +1,6 @@
 import type { FeedEvent, FeedEventKind } from '../services/ActivityService'
 import { FEED_LIMIT } from '../services/ActivityService'
-import type { JiraIssueSummary } from '../services/JiraService'
+import type { JiraIssueNarrative } from '../services/JiraService'
 import type { AffectedCiRecord, ChangeRecord, TaskRecord } from '../types'
 import { formatDayTime, parseSnDate } from '../utils/datetime'
 import { display, value } from '../utils/fields'
@@ -93,6 +93,12 @@ export interface PayloadChange {
  * on this issue — derived here from the tasks we already hold, rather than by
  * re-asking the server for each key.
  */
+export interface PayloadJiraComment {
+  author: string
+  when: string
+  body: string
+}
+
 export interface PayloadJira {
   key: string
   summary: string
@@ -100,6 +106,12 @@ export interface PayloadJira {
   status: string
   priority: string
   assignee: string
+  /**
+   * The issue's own words. Empty when Jira is unconfigured or could not be read —
+   * which is NOT the same as an issue nobody wrote on, and renderJira says so.
+   */
+  description: string
+  comments: PayloadJiraComment[]
   /** change_task numbers in THIS window that carry the key. */
   referencedBy: string[]
 }
@@ -120,6 +132,14 @@ export interface WeekendPayload {
    * fabricated calm with total confidence.
    */
   historyTruncated: boolean
+  /**
+   * True when the window names Jira keys and NOT ONE of them resolved — i.e. Jira
+   * could not be read at all, rather than a Jira that genuinely lacks these keys.
+   * Same reasoning as historyTruncated: unless told, a model reads an unresolved
+   * issue as an unfinished one, and a post-implementation review will list every
+   * issue in the weekend as a loose end because a token expired.
+   */
+  jiraUnresolved: boolean
   changes: PayloadChange[]
   jiras: PayloadJira[]
 }
@@ -137,8 +157,13 @@ export interface PayloadInput {
    */
   cis: AffectedCiRecord[]
   events: FeedEvent[]
-  /** Resolved Jira summaries, keyed by issue key — from useJiraSummaries. */
-  jiraSummaries: Map<string, JiraIssueSummary>
+  /**
+   * Resolved Jira issues WITH descriptions and comment threads, keyed by issue key
+   * — from useJiraNarratives, which only fetches once the report is opened. An
+   * empty map is a legitimate state (Jira unconfigured, unreachable, or still
+   * loading); every key the window's tasks name still appears in the payload.
+   */
+  jiraIssues: Map<string, JiraIssueNarrative>
   /** The cap `events` was fetched under, for the truncation flag. */
   eventLimit?: number
   now?: Date
@@ -202,7 +227,7 @@ function when(field: unknown, zone: string): string {
  * would duplicate an issue per reference.
  */
 export function buildPayload(input: PayloadInput): WeekendPayload {
-  const { weekend, timeZone: zone, changes, tasks, cis, events, jiraSummaries } = input
+  const { weekend, timeZone: zone, changes, tasks, cis, events, jiraIssues } = input
   const eventLimit = input.eventLimit ?? FEED_LIMIT
 
   // task_ci.task holds the CHANGE sys_id (not a change_task — the name is a trap
@@ -289,14 +314,20 @@ export function buildPayload(input: PayloadInput): WeekendPayload {
   const jiras: PayloadJira[] = [...jiraReferences.keys()]
     .sort((a, b) => a.localeCompare(b))
     .map((key) => {
-      const summary = jiraSummaries.get(key)
+      const issue = jiraIssues.get(key)
       return {
         key,
-        summary: summary?.summary ?? '',
-        type: summary?.type ?? '',
-        status: summary?.status ?? '',
-        priority: summary?.priority ?? '',
-        assignee: summary?.assignee ?? '',
+        summary: issue?.summary ?? '',
+        type: issue?.type ?? '',
+        status: issue?.status ?? '',
+        priority: issue?.priority ?? '',
+        assignee: issue?.assignee ?? '',
+        description: issue?.description ?? '',
+        comments: (issue?.comments ?? []).map((c) => ({
+          author: c.author,
+          when: formatDayTime(parseSnDate(c.when), zone),
+          body: c.body,
+        })),
         referencedBy: jiraReferences.get(key) ?? [],
       }
     })
@@ -314,6 +345,10 @@ export function buildPayload(input: PayloadInput): WeekendPayload {
       events: events.length,
     },
     historyTruncated: events.length >= eventLimit,
+    // Not "some failed" — ALL of them. One unresolved key among many is an ordinary
+    // dead reference (someone typed a key that Jira never had), and the payload says
+    // so per-issue. Every key failing at once is a broken pipe, not twenty bad keys.
+    jiraUnresolved: jiras.length > 0 && jiras.every((jira) => !jira.summary),
     changes: payloadChanges,
     jiras,
   }
@@ -413,6 +448,30 @@ function renderChange(change: PayloadChange): string {
   return out.join('\n')
 }
 
+/**
+ * Per-issue caps on the Jira half. The server already keeps only the newest 50
+ * comments; these bound what reaches the model, because a weekend can name twenty
+ * issues and one of them can be a two-year-old epic with a hundred replies.
+ *
+ * Every cut says so in the text. A model cannot tell a truncated thread from a
+ * quiet one, and "nobody followed up on this issue" is exactly the kind of
+ * confident, false sentence a post-implementation review must never contain.
+ */
+const JIRA_DESCRIPTION_CHARS = 1200
+const JIRA_COMMENTS_SHOWN = 10
+const JIRA_COMMENT_CHARS = 700
+
+function clip(body: string, max: number): string {
+  const trimmed = body.trim()
+  if (trimmed.length <= max) return trimmed
+  return `${trimmed.slice(0, max).trimEnd()} […${trimmed.length - max} more characters, truncated]`
+}
+
+/** Keep a multi-line body inside its bullet instead of breaking the list. */
+function indent(body: string): string {
+  return body.split('\n').join('\n    ')
+}
+
 function renderJira(jira: PayloadJira): string {
   const bits = [
     jira.type && jira.type,
@@ -420,10 +479,29 @@ function renderJira(jira: PayloadJira): string {
     jira.priority && `priority ${jira.priority}`,
     jira.assignee && `assignee ${jira.assignee}`,
   ].filter(Boolean)
-  const head = `- ${jira.key}${jira.summary ? ` — ${jira.summary}` : ' — (no issue found for this key)'}`
-  const meta = bits.length ? `\n  ${bits.join(' · ')}` : ''
-  const refs = jira.referencedBy.length ? `\n  referenced by: ${jira.referencedBy.join(', ')}` : ''
-  return head + meta + refs
+
+  const out = [
+    `- ${jira.key}${jira.summary ? ` — ${jira.summary}` : ' — (no issue found for this key)'}`,
+  ]
+  if (bits.length) out.push(`  ${bits.join(' · ')}`)
+  if (jira.referencedBy.length) out.push(`  referenced by: ${jira.referencedBy.join(', ')}`)
+  if (jira.description) {
+    out.push(`  description: ${indent(clip(jira.description, JIRA_DESCRIPTION_CHARS))}`)
+  }
+
+  const shown = jira.comments.slice(-JIRA_COMMENTS_SHOWN)
+  const omitted = jira.comments.length - shown.length
+  if (shown.length) {
+    const note = omitted ? `, ${omitted} older not shown` : ''
+    out.push(`  comments (${jira.comments.length}${note}, oldest first):`)
+    for (const comment of shown) {
+      out.push(
+        `  · ${comment.author}, ${comment.when}: ${indent(clip(comment.body, JIRA_COMMENT_CHARS))}`,
+      )
+    }
+  }
+
+  return out.join('\n')
 }
 
 /** The payload as the text that actually reaches the model. */
@@ -455,6 +533,14 @@ export function renderPayload(payload: WeekendPayload): string {
 
   out.push('')
   out.push('## Jira issues named by this weekend’s change tasks')
+  if (payload.jiraUnresolved) {
+    out.push(
+      `NOTE: not one of these keys resolved, so Jira could not be read at all — unreachable, or ` +
+        `not configured in the console's Settings. Their status and comments below are UNKNOWN, ` +
+        `not absent. Do not report them as unfinished, and do not conclude that nobody wrote on ` +
+        `them. Say the Jira side could not be read.`,
+    )
+  }
   out.push(payload.jiras.length ? payload.jiras.map(renderJira).join('\n') : '(none)')
 
   return out.join('\n')

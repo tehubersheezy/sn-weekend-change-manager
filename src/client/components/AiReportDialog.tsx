@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, Copy, Sparkles } from 'lucide-react'
 import type { ScreenKey } from '../utils/phases'
 import type { WeekendPayload } from '../prompts'
 import { buildPrompt } from '../prompts'
@@ -35,25 +35,44 @@ export function AiReportDialog({
   onOpenChange,
   screen,
   payload,
+  payloadPending,
   service,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   screen: ScreenKey
   payload: WeekendPayload | null
+  /**
+   * True while the window's Jira issues are still being fetched — the one part of
+   * the payload that isn't already on screen when the dialog opens.
+   */
+  payloadPending: boolean
   service: LlmService
 }) {
   const { report, run, reset } = useAiReport(service)
 
+  // Which screen's report we have already started, so the effect below can depend
+  // on `payload` (it must — it has to read the FINISHED one) without a refetch
+  // restarting a stream mid-sentence. Cleared on close.
+  const startedRef = useRef<ScreenKey | null>(null)
+
   useEffect(() => {
-    if (!open || !payload) return
-    void run(buildPrompt(screen, payload))
+    if (!open) {
+      startedRef.current = null
+      return
+    }
+    // The prompt is built ONCE, so it must not be built early. A payload whose Jira
+    // half has not landed still looks complete — every key is present, merely
+    // without its status, description or comments — and a review generated from it
+    // will state that nobody wrote anything on any issue, which is a lie told with
+    // total confidence. Wait for the fetch this open triggered.
+    if (!payload || payloadPending) return
     // Re-running on `screen` is intentional: the action is per-screen, so opening
     // Review after Plan must ask the new question rather than show the old answer.
-    // `payload` is excluded — it changes identity on every AMB refetch, and
-    // restarting a half-written report because a work note landed would be absurd.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, screen, run])
+    if (startedRef.current === screen) return
+    startedRef.current = screen
+    void run(buildPrompt(screen, payload))
+  }, [open, screen, run, payload, payloadPending])
 
   // Closing aborts the stream (useAiReport.reset) — a dismissed dialog must not
   // keep generating tokens against a report nobody will read.
@@ -61,8 +80,55 @@ export function AiReportDialog({
     if (!open) reset()
   }, [open, reset])
 
+  // COPY. The report is Markdown, and Markdown is what people want out of here — it
+  // pastes into a change record's close notes, a Confluence page or a Slack message
+  // and survives. So the clipboard gets `report.text` verbatim, NOT the rendered DOM:
+  // copying the rendered table would hand them a wall of untabbed text.
+  //
+  // The fallback is not defensive padding. This console runs INSIDE a ServiceNow
+  // Polaris iframe, and `navigator.clipboard` rejects in a frame that was not granted
+  // `clipboard-write` — a permission we do not control from here. execCommand is
+  // deprecated and works in exactly that case, so the button degrades instead of
+  // silently doing nothing.
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const copy = useCallback(async () => {
+    const text = report.text
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const field = document.createElement('textarea')
+      field.value = text
+      // Off-screen rather than hidden: a display:none field cannot be selected.
+      field.style.position = 'fixed'
+      field.style.left = '-9999px'
+      document.body.appendChild(field)
+      field.select()
+      try {
+        document.execCommand('copy')
+      } finally {
+        document.body.removeChild(field)
+      }
+    }
+    setCopied(true)
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000)
+  }, [report.text])
+
+  // The confirmation must not outlive the report it confirms: reopening on a fresh
+  // report with a stale "Copied" still lit would be a lie about what is on the
+  // clipboard.
+  useEffect(() => {
+    if (!open) setCopied(false)
+  }, [open])
+
+  useEffect(() => () => void (copiedTimer.current && clearTimeout(copiedTimer.current)), [])
+
   const counts = payload?.counts ?? { changes: 0, tasks: 0, cis: 0, jiras: 0, events: 0 }
-  const waiting = report.status === 'generating' && !report.streaming
+  // The Jira fetch is part of "thinking" as far as anyone reading this is concerned;
+  // an empty panel while it lands would just look broken.
+  const waiting = payloadPending || (report.status === 'generating' && !report.streaming)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -100,9 +166,30 @@ export function AiReportDialog({
             {counts.changes} changes · {counts.tasks} tasks · {counts.cis} CIs · {counts.jiras} Jiras
             {payload?.historyTruncated ? ' · history truncated' : ''}
           </p>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Only once the report is whole. A half-streamed report on the clipboard
+                is worse than no button — it looks complete in the paste. */}
+            <Button
+              variant="secondary"
+              onClick={copy}
+              disabled={report.status !== 'done' || !report.text.trim()}
+            >
+              {copied ? (
+                <Check className="size-4 shrink-0 text-success-ink" aria-hidden />
+              ) : (
+                <Copy className="size-4 shrink-0" aria-hidden />
+              )}
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
+          {/* The label above swaps under the pointer, which a screen reader following
+              focus would never hear. Announce it. */}
+          <span aria-live="polite" className="sr-only">
+            {copied ? 'Report copied to clipboard' : ''}
+          </span>
         </div>
       </DialogContent>
     </Dialog>

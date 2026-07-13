@@ -49,6 +49,18 @@ export interface JiraIssueSummary {
   assignee: string
 }
 
+/**
+ * What the AI report reads: a summary with the issue's own words attached.
+ *
+ * Not JiraIssueDetail — the report has no use for epic, sprint, labels or story
+ * points, and everything in here is paid for twice: once over the wire, once in
+ * the model's context window.
+ */
+export interface JiraIssueNarrative extends JiraIssueSummary {
+  description: string
+  comments: JiraComment[]
+}
+
 /** Everything the detail surface renders. */
 export interface JiraIssueDetail extends JiraIssueSummary {
   projectKey: string
@@ -107,6 +119,9 @@ export class JiraService {
   /** key → summary, or null for "asked, and there is no such issue". Both are cache hits. */
   private summaries = new Map<string, JiraIssueSummary | null>()
 
+  /** The same, for the report's richer shape. Separate on purpose — see listNarratives. */
+  private narratives = new Map<string, JiraIssueNarrative | null>()
+
   /**
    * The cache is per-instance and the caller rebuilds this service when the config
    * changes, so a key resolved against the OLD Jira can never survive into the new
@@ -144,6 +159,42 @@ export class JiraService {
   }
 
   /**
+   * The same batch call, asking for each issue's description and comment thread.
+   * For the AI report only — nothing on screen renders these.
+   *
+   * It keeps its OWN cache rather than sharing `summaries`, and that separation is
+   * load-bearing: a key already resolved for a badge is in the summary cache
+   * WITHOUT its description, and a shared cache would hand that back as a hit. The
+   * report would then read an issue with an empty description and no comments and
+   * conclude, with total confidence, that nobody wrote anything on it.
+   *
+   * Degrades like listSummaries: a failed chunk settles as "asked, and there is
+   * nothing", so a dead Jira costs the report its Jira half and never blocks it.
+   */
+  async listNarratives(keys: string[]): Promise<Map<string, JiraIssueNarrative>> {
+    const wanted = [...new Set(keys.map((k) => k.trim()).filter(Boolean))]
+    const unresolved = wanted.filter((k) => !this.narratives.has(k))
+
+    for (const chunk of chunkIds(unresolved)) {
+      try {
+        for (const issue of await this.fetchNarrativeChunk(chunk)) {
+          this.narratives.set(issue.key, issue)
+        }
+      } catch {
+        /* fall through — the loop below settles the whole chunk as unknown */
+      }
+      for (const key of chunk) if (!this.narratives.has(key)) this.narratives.set(key, null)
+    }
+
+    const found = new Map<string, JiraIssueNarrative>()
+    for (const key of wanted) {
+      const issue = this.narratives.get(key)
+      if (issue) found.set(key, issue)
+    }
+    return found
+  }
+
+  /**
    * One issue and its live ServiceNow references. Never cached: the references
    * are real records that move during a weekend, and the detail view refetches
    * them when its AMB watcher fires.
@@ -163,6 +214,13 @@ export class JiraService {
     const params = new URLSearchParams({ keys: keys.join(',') })
     const body = await this.get(`${ISSUES_ENDPOINT}?${params.toString()}`)
     return (body?.result?.issues ?? body?.issues ?? []) as JiraIssueSummary[]
+  }
+
+  /** Same route, same shape, plus description and comments. `detail=full` is the whole difference. */
+  private async fetchNarrativeChunk(keys: string[]): Promise<JiraIssueNarrative[]> {
+    const params = new URLSearchParams({ keys: keys.join(','), detail: 'full' })
+    const body = await this.get(`${ISSUES_ENDPOINT}?${params.toString()}`)
+    return (body?.result?.issues ?? body?.issues ?? []) as JiraIssueNarrative[]
   }
 
   /**

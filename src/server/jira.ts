@@ -84,6 +84,22 @@ const COMMENT_LIMIT = 50
 /** The only fields a summary needs. Asking for more would just cost payload. */
 const SUMMARY_FIELDS = 'summary,issuetype,status,priority,assignee'
 
+/**
+ * A summary, plus the two fields nothing on screen renders and the AI report
+ * cannot do without: the description and the comment thread.
+ *
+ * These ride on the SAME JQL search rather than N calls to /issue — Jira returns
+ * `description` and `comment` as ordinary fields, so a whole weekend's issues
+ * still cost one callout. That is the only reason this is affordable at all: a
+ * per-key fan-out for twenty issues inside one synchronous scripted-REST
+ * transaction is how you turn a report into a timeout.
+ *
+ * Opt-in (`?detail=full`) because the list surfaces must NOT pay for it. A badge
+ * row does not want a comment thread over the wire, and the report is opened
+ * rarely.
+ */
+const REPORT_FIELDS = SUMMARY_FIELDS + ',description,comment'
+
 type JiraStatusCategory = 'todo' | 'in-progress' | 'done'
 
 /** Per-request Jira config, read off the headers. Absent config is not an error. */
@@ -141,6 +157,18 @@ interface JiraIssueSummary {
     statusCategory: JiraStatusCategory
     priority: string
     assignee: string
+}
+
+/**
+ * What the AI report reads: a summary with the issue's own words attached.
+ *
+ * Deliberately NOT JiraIssueDetail. The report has no use for epic, sprint,
+ * labels or story points, and every field in a batch of twenty issues is paid for
+ * twice — once over the wire, once in the model's context window.
+ */
+interface JiraIssueNarrative extends JiraIssueSummary {
+    description: string
+    comments: JiraComment[]
 }
 
 /** Everything the detail surface renders. */
@@ -1113,6 +1141,28 @@ function mapSummary(raw: any): JiraIssueSummary | null {
 }
 
 /**
+ * A search hit -> the shape the AI report reads. Same mapping as a summary, plus
+ * the issue's own words. readComments() already keeps only the newest
+ * COMMENT_LIMIT, so a decade-old issue cannot blow up one weekend's payload.
+ */
+function mapNarrative(raw: any): JiraIssueNarrative | null {
+    const summary = mapSummary(raw)
+    if (!summary) return null
+    const fields = raw.fields || {}
+    return {
+        key: summary.key,
+        summary: summary.summary,
+        type: summary.type,
+        status: summary.status,
+        statusCategory: summary.statusCategory,
+        priority: summary.priority,
+        assignee: summary.assignee,
+        description: text(fields.description),
+        comments: readComments(fields.comment),
+    }
+}
+
+/**
  * A Jira issue -> everything the detail surface renders.
  *
  * Null when the payload is not an issue at all; the caller turns that into an
@@ -1176,6 +1226,21 @@ function toSummary(issue: JiraIssueDetail): JiraIssueSummary {
     }
 }
 
+/** Detail → the subset the AI report needs. The fixtures already carry both fields. */
+function toNarrative(issue: JiraIssueDetail): JiraIssueNarrative {
+    return {
+        key: issue.key,
+        summary: issue.summary,
+        type: issue.type,
+        status: issue.status,
+        statusCategory: issue.statusCategory,
+        priority: issue.priority,
+        assignee: issue.assignee,
+        description: issue.description,
+        comments: issue.comments,
+    }
+}
+
 /**
  * The real half of the payload: every change task in this instance that names
  * this issue, joined to its parent change.
@@ -1195,6 +1260,11 @@ function readReferences(key: string): JiraReference[] {
 
     const tasks = new GlideRecordSecure('change_task')
     tasks.addQuery('correlation_display', key)
+    // Canceled tasks are excluded here for the same reason they are excluded from
+    // the window: the question this card answers is "which weekend work depends on
+    // this issue", and canceled work is not work. A canceled task listing itself as
+    // a dependent would read as a live commitment nobody intends to keep.
+    tasks.addQuery('state', '!=', '4')
     tasks.setLimit(REFERENCE_LIMIT)
     tasks.query()
 
@@ -1266,12 +1336,12 @@ function uniqueKeys(raw: string): string[] {
     return keys
 }
 
-/** Fixture summaries, for the unconfigured case. */
-function fixtureSummaries(keys: string[]): JiraIssueSummary[] {
+/** Fixture issues, for the unconfigured case. */
+function fixtureIssues(keys: string[], narrative: boolean): JiraIssueSummary[] {
     const issues: JiraIssueSummary[] = []
     for (let i = 0; i < keys.length; i++) {
         const issue = findFixture(keys[i])
-        if (issue) issues.push(toSummary(issue))
+        if (issue) issues.push(narrative ? toNarrative(issue) : toSummary(issue))
     }
     return issues
 }
@@ -1289,12 +1359,12 @@ function fixtureSummaries(keys: string[]): JiraIssueSummary[] {
  * and says nothing about the rest, which is the contract the client already has:
  * a key absent from `issues` means "asked, and there is nothing".
  */
-function searchSummaries(config: JiraConfig, keys: string[]): JiraIssueSummary[] {
+function searchIssues(config: JiraConfig, keys: string[], narrative: boolean): JiraIssueSummary[] {
     const jql = 'key in ("' + keys.join('","') + '")'
     const path =
         JIRA_API +
         '/search?jql=' + encodeURIComponent(jql) +
-        '&fields=' + encodeURIComponent(SUMMARY_FIELDS) +
+        '&fields=' + encodeURIComponent(narrative ? REPORT_FIELDS : SUMMARY_FIELDS) +
         '&maxResults=' + keys.length +
         '&validateQuery=warn'
 
@@ -1302,9 +1372,14 @@ function searchSummaries(config: JiraConfig, keys: string[]): JiraIssueSummary[]
     if (result.error || !result.data || !Array.isArray(result.data.issues)) {
         // Summaries are decoration: a badge that cannot resolve still shows its
         // key. Log it and hand back nothing rather than failing the request.
+        //
+        // The report degrades the same way, and that is the right call: an AI
+        // report that refuses to generate because Jira is down is worse than one
+        // that generates and says the Jira side could not be read. The payload
+        // still carries every key and which tasks named it.
         gs.warn(
-            '[weekend-console] Jira summary search for ' + keys.length +
-            ' key(s) failed: ' + (result.error || 'unexpected response shape') +
+            '[weekend-console] Jira ' + (narrative ? 'report' : 'summary') + ' search for ' +
+            keys.length + ' key(s) failed: ' + (result.error || 'unexpected response shape') +
             '. Badges will render unresolved.',
         )
         return []
@@ -1313,8 +1388,8 @@ function searchSummaries(config: JiraConfig, keys: string[]): JiraIssueSummary[]
     const raw = result.data.issues
     const issues: JiraIssueSummary[] = []
     for (let i = 0; i < raw.length; i++) {
-        const summary = mapSummary(raw[i])
-        if (summary) issues.push(summary)
+        const issue = narrative ? mapNarrative(raw[i]) : mapSummary(raw[i])
+        if (issue) issues.push(issue)
     }
     return issues
 }
@@ -1323,10 +1398,16 @@ function searchSummaries(config: JiraConfig, keys: string[]): JiraIssueSummary[]
  * GET /api/x_912401_weekend_c/jira/issues?keys=NET-4451,SEC-3319
  * Headers: X-Jira-Url, X-Jira-Token (both optional; without them, fixtures).
  *
- * Batch summaries for lists and badges — the Jiras tab and the activity feed
- * both render many keys at once and neither needs a description or comments.
+ * Batch issues for lists and badges — the Jiras tab and the activity feed both
+ * render many keys at once and neither needs a description or comments.
  * Keys with no issue behind them are simply absent from `issues`; the client
  * caches that as "asked, and there is nothing", so a miss costs one request.
+ *
+ * `?detail=full` adds the description and the comment thread to every issue, for
+ * the ONE caller that needs them: the AI report, which reasons about what people
+ * actually wrote on an issue and not merely whether it is Done. It is opt-in
+ * because a badge must not pay a comment thread's freight, and it rides the same
+ * single JQL search — see REPORT_FIELDS.
  *
  * THIS ROUTE NEVER FAILS. Summaries are decoration — a row whose summary did not
  * resolve still shows its key and still links through — so a dead or misconfigured
@@ -1335,6 +1416,7 @@ function searchSummaries(config: JiraConfig, keys: string[]): JiraIssueSummary[]
  */
 export function listIssues(request: any, response: any): void {
     const keys = uniqueKeys(queryParam(request, 'keys'))
+    const narrative = queryParam(request, 'detail') === 'full'
     if (keys.length === 0) {
         response.setBody({ issues: [] })
         return
@@ -1342,7 +1424,7 @@ export function listIssues(request: any, response: any): void {
 
     const config = readConfig(request)
     if (!config) {
-        response.setBody({ issues: fixtureSummaries(keys) })
+        response.setBody({ issues: fixtureIssues(keys, narrative) })
         return
     }
 
@@ -1354,7 +1436,7 @@ export function listIssues(request: any, response: any): void {
         return
     }
 
-    response.setBody({ issues: searchSummaries(config, keys) })
+    response.setBody({ issues: searchIssues(config, keys, narrative) })
 }
 
 /**
