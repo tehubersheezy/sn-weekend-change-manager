@@ -10,7 +10,7 @@
     "css": "tailwindcss -i ./src/client/styles/theme.css -o ./src/client/styles/tailwind.generated.css --minify",
     "css:watch": "tailwindcss -i ./src/client/styles/theme.css -o ./src/client/styles/tailwind.generated.css --watch",
     "build": "now-sdk build",
-    "deploy": "npm run build && now-sdk install",
+    "deploy": "npm run build && node scripts/assert-deploy-shape.mjs && now-sdk install",
     "transform": "now-sdk transform",
     "types": "now-sdk dependencies",
     "dev": "now-sdk run dev"
