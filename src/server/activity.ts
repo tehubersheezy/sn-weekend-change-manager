@@ -39,6 +39,24 @@ import { GlideRecord, GlideRecordSecure, gs } from '@servicenow/glide'
 const FEED_LIMIT = 80
 
 /**
+ * Ceiling on ?limit=. The feed asks for FEED_LIMIT; the LLM payload builder asks
+ * for far more, because its cap is window-WIDE — at 80 events across ~110 changes,
+ * most changes contribute no history at all, and a model reads that silence as
+ * "nothing happened" rather than "truncated". A higher cap is what makes the
+ * payload's history complete enough to reason over.
+ */
+const MAX_LIMIT = 1000
+
+/** ?limit=, clamped to [1, MAX_LIMIT]. Anything unparseable falls back to the feed's cap. */
+function readLimit(request: any): number {
+    const raw = queryParam(request, 'limit').trim()
+    if (!raw) return FEED_LIMIT
+    const parsed = parseInt(raw, 10)
+    if (isNaN(parsed) || parsed < 1) return FEED_LIMIT
+    return parsed > MAX_LIMIT ? MAX_LIMIT : parsed
+}
+
+/**
  * Population safety net. A weekend is ~350 changes + ~240 tasks; this only trips
  * on a pathological window, and we log rather than silently truncate the feed.
  */
@@ -48,7 +66,7 @@ const POPULATION_LIMIT = 2000
  * sys_id IN-lists are built server-side, so the front proxy's ~11.5KB URI limit
  * (which forces the client to chunk at 80) does not apply here — but one IN
  * clause over a whole weekend is still worth splitting. Each chunk fetches a
- * full FEED_LIMIT of rows so that merging chunks and taking the global top N is
+ * full `limit` of rows so that merging chunks and taking the global top N is
  * exact: any single chunk could legitimately own every event in the final feed.
  */
 const ID_CHUNK = 200
@@ -148,7 +166,7 @@ function securePopulation(table: string, query: string): string[] {
  * read ACL, which returns zero rows for every non-audit_viewer user — scoped to
  * the ACL-checked population, so it exposes nothing the caller couldn't already see.
  */
-function readJournal(recordIds: string[]): FeedEvent[] {
+function readJournal(recordIds: string[], limit: number): FeedEvent[] {
     const events: FeedEvent[] = []
     const chunks = chunk(recordIds, ID_CHUNK)
 
@@ -160,7 +178,7 @@ function readJournal(recordIds: string[]): FeedEvent[] {
             '^element_idIN' + chunks[c].join(','),
         )
         gr.orderByDesc('sys_created_on')
-        gr.setLimit(FEED_LIMIT)
+        gr.setLimit(limit)
         gr.query()
 
         while (gr.next()) {
@@ -183,7 +201,7 @@ function readJournal(recordIds: string[]): FeedEvent[] {
  * whitelisted because approval-history journal noise also mirrors into sys_audit
  * as "JOURNAL FIELD ADDITION" rows, which are not feed events.
  */
-function readAudit(recordIds: string[]): FeedEvent[] {
+function readAudit(recordIds: string[], limit: number): FeedEvent[] {
     const events: FeedEvent[] = []
     const chunks = chunk(recordIds, ID_CHUNK)
 
@@ -195,7 +213,7 @@ function readAudit(recordIds: string[]): FeedEvent[] {
             '^documentkeyIN' + chunks[c].join(','),
         )
         gr.orderByDesc('sys_created_on')
-        gr.setLimit(FEED_LIMIT)
+        gr.setLimit(limit)
         gr.query()
 
         while (gr.next()) {
@@ -254,14 +272,16 @@ function newestFirst(a: FeedEvent, b: FeedEvent): number {
 }
 
 /**
- * GET /api/x_912401_weekend_c/activity/events?from=<utc>&to=<utc>
+ * GET /api/x_912401_weekend_c/activity/events?from=<utc>&to=<utc>[&limit=<n>]
  *
  * Both bounds are UTC 'YYYY-MM-DD HH:MM:SS' — the client's WeekendWindow.startUtc
- * and .endUtc, verbatim.
+ * and .endUtc, verbatim. `limit` defaults to the feed's 80 and is capped at
+ * MAX_LIMIT; the LLM payload builder is the caller that asks for more.
  */
 export function weekendActivity(request: any, response: any): void {
     const from = queryParam(request, 'from').trim()
     const to = queryParam(request, 'to').trim()
+    const limit = readLimit(request)
 
     // Reject malformed bounds rather than coercing them. ServiceNow silently
     // DROPS invalid terms from an encoded query, so a bad date would not error —
@@ -282,10 +302,10 @@ export function weekendActivity(request: any, response: any): void {
         return
     }
 
-    const events = readJournal(recordIds).concat(readAudit(recordIds))
+    const events = readJournal(recordIds, limit).concat(readAudit(recordIds, limit))
     events.sort(newestFirst)
 
-    const top = events.slice(0, FEED_LIMIT)
+    const top = events.slice(0, limit)
     resolveAuthors(top)
     response.setBody({ events: top })
 }

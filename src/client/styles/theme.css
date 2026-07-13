@@ -440,6 +440,42 @@
   --animate-dialog-in: dialog-in 200ms cubic-bezier(0.25, 1, 0.5, 1) both;
   --animate-dialog-out: dialog-out 150ms cubic-bezier(0.25, 1, 0.5, 1) both;
 
+  /*
+   * THE THINKING SWEEP — the one ambient loop in the system, and a deliberate
+   * exception to two of Motion's own rules. See DESIGN.md > Interaction: Hover &
+   * Motion > Motion (the ambient-loop amendment) for the full argument; the short
+   * version is that a 10-30s blind wait on a language model is a state the console
+   * genuinely cannot describe any other way, and an unhurried loop is the honest
+   * expression of "indeterminate", where a progress bar would be a lie.
+   *
+   * It moves a warm --primary-ink band through the serif headline of AiThinking
+   * (background-clip: text). It is bound to the ONE line that says what is
+   * happening, so the motion is the state rather than an ornament beside it.
+   *
+   * Two departures, both recorded in DESIGN.md rather than smuggled:
+   *
+   * 1. `linear`, not the system's ease-out-quart. This is the only linear timing
+   *    in the app and it is not laziness: an eased loop lurches. from/to are
+   *    discontinuous across the loop seam, so a curve that ends slow and restarts
+   *    fast reads as a stutter every cycle. Constant velocity is the only thing
+   *    that drifts. (The band is also fully off the text at both ends of the
+   *    range, which hides the seam a second time.)
+   * 2. `infinite`, with no `both`. Every other token here carries fill-mode `both`
+   *    for a one-shot with a delay; a loop has no from-state to hold.
+   *
+   * 3600ms is chosen to be slower than anything else in the app — this is the
+   * opposite of urgency theater (PRODUCT.md). The band is visible for ~2s and the
+   * text rests for ~1.6s between passes.
+   *
+   * REDUCED MOTION: the keyframes set `opacity: 1` and the `thinking-sweep`
+   * utility's resting state is `opacity: 0`. So killing the animation (the block
+   * at the end of this file) does not freeze a half-drawn gradient across the
+   * headline — it removes the sweep layer entirely, leaving the plain ink serif
+   * headline underneath, fully drawn and fully legible. The still state is the
+   * correct state, which is the whole trick.
+   */
+  --animate-thinking-sweep: thinking-sweep 3600ms linear infinite;
+
   @keyframes rise-in {
     from {
       opacity: 0;
@@ -486,6 +522,24 @@
       transform: translate(-50%, -50%) scale(0.97);
     }
   }
+  /*
+   * The band travels left -> right through the text. background-size is 240%, so
+   * a LOWER background-position-x shifts the image RIGHT: 130% parks the band off
+   * the left edge, -40% parks it off the right. `opacity: 1` here is load-bearing
+   * — see the --animate-thinking-sweep note above and the `thinking-sweep`
+   * utility, whose resting opacity is 0 so that reduced motion degrades to a
+   * clean ink headline instead of a frozen gradient.
+   */
+  @keyframes thinking-sweep {
+    from {
+      opacity: 1;
+      background-position: 130% 0;
+    }
+    to {
+      opacity: 1;
+      background-position: -40% 0;
+    }
+  }
 
   /* Font stacks — local system substitutes only, no external font links */
   --font-display: 'Tiempos Headline', 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
@@ -500,6 +554,44 @@
    * make an accidental <pre> render in the body face.
    */
   --font-mono: 'StyreneB', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The thinking sweep's paint. Pairs with --animate-thinking-sweep above.      */
+/* -------------------------------------------------------------------------- */
+/*
+ * A real utility rather than a pile of bg-[...] arbitrary values, because the
+ * three declarations below only work as a set (a gradient nobody can see without
+ * the clip, a clip that eats the text without the transparent color) and because
+ * -webkit-background-clip has no Tailwind class at all.
+ *
+ * The band is --primary-ink (#a9583e), NOT --primary (#cc785c). This is the
+ * system's own fill/ink law, and here it is also an accessibility floor: the
+ * sweep repaints real headline glyphs as it passes, so it is TYPE, and coral as
+ * type is 3.1:1 — an AA failure. --primary-ink is 4.8:1 on cream, so the headline
+ * clears AA at every frame of the animation, not just at rest. See DESIGN.md >
+ * Colors > Semantic ("a word takes the -ink").
+ *
+ * opacity: 0 is the resting state ON PURPOSE — the keyframes raise it to 1.
+ * Animation-origin declarations outrank author-normal ones, so the sweep is
+ * visible while it runs and invisible the moment `animation: none` applies. That
+ * is what makes prefers-reduced-motion degrade to a clean, still, fully-legible
+ * ink headline rather than a gradient frozen mid-pass. Do not "fix" this to
+ * opacity: 1.
+ */
+@utility thinking-sweep {
+  background-image: linear-gradient(
+    100deg,
+    transparent 44%,
+    var(--primary-ink) 50%,
+    transparent 56%
+  );
+  background-size: 240% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -551,7 +643,18 @@
   .animate-fade-in,
   .animate-fade-out,
   .animate-dialog-in,
-  .animate-dialog-out {
+  .animate-dialog-out,
+  /*
+   * The ambient loop goes too, and it is the one that had to be DESIGNED to
+   * survive this rather than merely switched off. Killing an infinite gradient
+   * sweep normally leaves a half-lit headline frozen mid-pass. It doesn't here:
+   * the `thinking-sweep` utility rests at opacity 0 and only the keyframes raise
+   * it, so `animation: none` deletes the sweep layer and reveals the plain ink
+   * serif headline beneath — still, whole, legible. Reduced-motion users lose no
+   * information either: the counts, the copy and the (non-moving) elapsed clock
+   * carry every real signal this panel has. The sweep was never the message.
+   */
+  .animate-thinking-sweep {
     animation: none;
   }
   .transition-transform,

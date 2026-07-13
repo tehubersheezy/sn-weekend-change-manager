@@ -1,6 +1,7 @@
 import type { ChangeRecord, TaskRecord } from '../types'
 import { value } from '../utils/fields'
 import { formatDay, parseSnDate } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { taskProgress } from '../utils/progress'
 import { entranceDelay } from '../lib/utils'
 import { CenteredState, GroupLabel } from './ChangeList'
@@ -18,6 +19,7 @@ export function PlanList({
   selectedId: string | null
   onOpen: (sysId: string) => void
 }) {
+  const zone = useTimeZone()
   if (changes.length === 0) {
     return (
       <CenteredState title="Nothing left to plan">
@@ -34,7 +36,7 @@ export function PlanList({
   const groups: { day: string; items: ChangeRecord[]; start: number }[] = []
   let count = 0
   for (const c of changes) {
-    const day = formatDay(parseSnDate(value(c.start_date)))
+    const day = formatDay(parseSnDate(value(c.start_date)), zone)
     const last = groups[groups.length - 1]
     if (last && last.day === day) last.items.push(c)
     else groups.push({ day, items: [c], start: count })

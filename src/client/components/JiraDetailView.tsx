@@ -4,6 +4,7 @@ import type { JiraIssueDetail, JiraReference, JiraService } from '../services/Ji
 import type { SnowAmb } from '../services/SnowAmb'
 import { useRecordWatch } from '../hooks/useAmb'
 import { formatDateTime, formatDay, formatTime, parseSnDate } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { asStateField } from '../utils/stateLabels'
 import { Button } from './ui/button'
 import { Skeleton } from './ui/skeleton'
@@ -58,6 +59,7 @@ export function JiraDetailView({
   onBack: () => void
   onOpenChange: (sysId: string, tab?: DetailTab) => void
 }) {
+  const zone = useTimeZone()
   const [issue, setIssue] = useState<JiraIssueDetail | null>(null)
   const [references, setReferences] = useState<JiraReference[]>([])
   const [loading, setLoading] = useState(true)
@@ -181,8 +183,8 @@ export function JiraDetailView({
                 value={issue.storyPoints === null ? '' : String(issue.storyPoints)}
               />
               <Field label="Resolution" value={issue.resolution} />
-              <Field label="Created" value={formatDateTime(parseSnDate(issue.created))} />
-              <Field label="Updated" value={formatDateTime(parseSnDate(issue.updated))} />
+              <Field label="Created" value={formatDateTime(parseSnDate(issue.created), zone)} />
+              <Field label="Updated" value={formatDateTime(parseSnDate(issue.updated), zone)} />
               {issue.labels.length > 0 && (
                 <div className="col-span-2">
                   <dt className="text-caption text-muted-foreground">Labels</dt>
@@ -218,8 +220,8 @@ export function JiraDetailView({
                     <div className="flex flex-wrap items-baseline gap-x-2 text-caption text-muted-foreground">
                       <span className="font-medium text-ink">{comment.author}</span>
                       <span>
-                        {formatDay(parseSnDate(comment.when))} at{' '}
-                        {formatTime(parseSnDate(comment.when))}
+                        {formatDay(parseSnDate(comment.when), zone)} at{' '}
+                        {formatTime(parseSnDate(comment.when), zone)}
                       </span>
                     </div>
                     <p className="mt-2 whitespace-pre-wrap text-body-sm text-body-text">

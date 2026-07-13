@@ -5,7 +5,8 @@ import type { ChangeService } from '../services/ChangeService'
 import type { SnowAmb } from '../services/SnowAmb'
 import { useRecordWatch } from '../hooks/useAmb'
 import { display, value } from '../utils/fields'
-import { formatDateTime, parseSnDate } from '../utils/datetime'
+import { formatDateTime, parseSnDate, zoneAbbreviation } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
 import { Skeleton } from './ui/skeleton'
@@ -47,6 +48,7 @@ export function TaskDetailView({
   onOpenPerson: (personSysId: string) => void
   onOpenJira: (key: string) => void
 }) {
+  const zone = useTimeZone()
   const [task, setTask] = useState<TaskRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -81,6 +83,10 @@ export function TaskDetailView({
 
   const start = task && parseSnDate(value(task.planned_start_date))
   const end = task && parseSnDate(value(task.planned_end_date))
+  // Abbreviation omitted when the task carries no planned dates (common) so the
+  // meta row reads '— → —' rather than dangling a lone zone code.
+  const windowInstant = start || end
+  const dateAbbr = windowInstant ? zoneAbbreviation(zone, windowInstant) : ''
   const jiraKey = task ? display(task.correlation_display) : ''
   const changeId = task ? value(task.change_request) : ''
   const assigneeId = task ? value(task.assigned_to) : ''
@@ -146,8 +152,9 @@ export function TaskDetailView({
                 </span>
               ) : null}
               <span>
-                {formatDateTime(start)} <span className="text-muted-soft">→</span>{' '}
-                {formatDateTime(end)} ET
+                {formatDateTime(start, zone)} <span className="text-muted-soft">→</span>{' '}
+                {formatDateTime(end, zone)}
+                {dateAbbr && ` ${dateAbbr}`}
               </span>
             </div>
           </header>

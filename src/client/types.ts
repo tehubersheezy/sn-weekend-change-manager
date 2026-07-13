@@ -34,6 +34,15 @@ export interface AffectedCiRecord {
   ci_item: SnField
   'ci_item.sys_class_name': SnField
   'ci_item.operational_status': SnField
+  /**
+   * The CHANGE this CI is affected by (task_ci.task holds the change_request
+   * sys_id, not a change_task — see ChangeService.listAffectedCis).
+   *
+   * Only populated by listWeekendAffectedCis, which fetches many changes' CIs in
+   * one query and therefore has to carry the grouping key. The per-change read
+   * already filters on task=<sys_id>, so it has nothing to group by and omits it.
+   */
+  task?: SnField
 }
 
 /** A change_task row. */

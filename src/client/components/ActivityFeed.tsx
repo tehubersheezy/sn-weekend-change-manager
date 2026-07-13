@@ -5,6 +5,7 @@ import { FEED_LIMIT } from '../services/ActivityService'
 import type { ChangeRecord, TaskRecord } from '../types'
 import { display, value } from '../utils/fields'
 import { formatDay, formatTime } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { asStateField } from '../utils/stateLabels'
 import { cn, entranceDelay } from '../lib/utils'
 import { Badge } from './ui/badge'
@@ -77,6 +78,7 @@ export function ActivityFeed({
   /** Open a Jira issue in the detail pane. */
   onOpenJira: (key: string) => void
 }) {
+  const zone = useTimeZone()
   // Join events to loaded records; events on records that left the window
   // (or task events whose parent isn't loaded) drop out here.
   const items = useMemo<FeedItem[]>(() => {
@@ -118,14 +120,14 @@ export function ActivityFeed({
     const groups: { day: string; items: FeedItem[]; start: number }[] = []
     let count = 0
     for (const item of items) {
-      const day = formatDay(item.event.when)
+      const day = formatDay(item.event.when, zone)
       const last = groups[groups.length - 1]
       if (last && last.day === day) last.items.push(item)
       else groups.push({ day, items: [item], start: count })
       count++
     }
     return groups
-  }, [items])
+  }, [items, zone])
 
   return (
     <div className="flex flex-col gap-8 px-8 py-8">
@@ -213,6 +215,7 @@ function FeedRow({
   onOpen: (sysId: string, tab?: DetailTab) => void
   onOpenJira: (key: string) => void
 }) {
+  const zone = useTimeZone()
   const { event, change, task, jiraKeys } = item
   const Icon = KIND_ICON[event.kind]
   const changeSysId = value(change.sys_id)
@@ -279,7 +282,7 @@ function FeedRow({
         )}
       </div>
       <span className="shrink-0 font-sans text-caption text-muted-foreground">
-        {formatTime(event.when)}
+        {formatTime(event.when, zone)}
       </span>
     </div>
   )

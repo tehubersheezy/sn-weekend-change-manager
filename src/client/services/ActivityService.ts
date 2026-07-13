@@ -30,8 +30,19 @@ interface FeedEventDto extends Omit<FeedEvent, 'when' | 'table'> {
   table: string
 }
 
-/** Most events the feed keeps. The server caps identically. */
+/** Most events the feed keeps. The server defaults to the same number. */
 export const FEED_LIMIT = 80
+
+/**
+ * What the LLM payload builder asks for instead.
+ *
+ * The cap is window-WIDE, not per-record, which is fine for a feed nobody scrolls
+ * to the bottom of and wrong for a payload a model reasons over: at 80 events
+ * across ~110 changes, most changes carry no history at all, and "no history" reads
+ * as "nothing happened" rather than "truncated". The server clamps this to its own
+ * MAX_LIMIT, and the payload flags any response that comes back at its cap.
+ */
+export const PAYLOAD_FEED_LIMIT = 1000
 
 const FEED_TABLES = new Set(['change_request', 'change_task'])
 
@@ -51,8 +62,12 @@ const FEED_TABLES = new Set(['change_request', 'change_task'])
  * round-trips, and author display names now arrive resolved.
  */
 export class ActivityService {
-  async listActivity(weekend: WeekendWindow): Promise<FeedEvent[]> {
-    const params = new URLSearchParams({ from: weekend.startUtc, to: weekend.endUtc })
+  async listActivity(weekend: WeekendWindow, limit: number = FEED_LIMIT): Promise<FeedEvent[]> {
+    const params = new URLSearchParams({
+      from: weekend.startUtc,
+      to: weekend.endUtc,
+      limit: String(limit),
+    })
     const response = await fetch(`${ACTIVITY_ENDPOINT}?${params.toString()}`, {
       method: 'GET',
       headers: { Accept: 'application/json', 'X-UserToken': window.g_ck },
@@ -75,6 +90,8 @@ export class ActivityService {
       events.push({ ...row, table: row.table as FeedEvent['table'], when })
     }
     // The server already ordered and capped these; the slice is belt-and-braces.
-    return events.slice(0, FEED_LIMIT)
+    // It slices to the REQUESTED limit, not FEED_LIMIT — a payload caller asking
+    // for more must not have its extra events thrown away on arrival.
+    return events.slice(0, limit)
   }
 }

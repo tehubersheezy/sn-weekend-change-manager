@@ -7,6 +7,13 @@
             "ES2022",
             "DOM"
         ],
-        "jsx": "preserve"
+        "jsx": "preserve",
+        // @anthropic-ai/sdk is isomorphic: its .d.ts files reference Node globals
+        // (undici, Buffer, a Node agent-toolset entrypoint we never import). This
+        // is a browser-only tsconfig with no @types/node, so typechecking those
+        // declarations fails on code we do not ship. skipLibCheck scopes the
+        // typecheck to OUR sources, which is the only thing this gate was ever
+        // meant to guard.
+        "skipLibCheck": true
     }
 }

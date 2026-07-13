@@ -6,11 +6,19 @@ import { UserService } from './services/UserService'
 import { useAmbClient } from './hooks/useAmb'
 import { useWeekendChanges } from './hooks/useWeekendChanges'
 import { useActivityFeed } from './hooks/useActivityFeed'
+import { useWeekendCis } from './hooks/useWeekendCis'
+import { useJiraSummaries } from './hooks/useJiraSummaries'
+import { LlmService } from './services/LlmService'
+import { buildPayload } from './prompts'
+import { AiReportDialog } from './components/AiReportDialog'
+import { jiraIssuesFromTasks } from './components/JiraList'
 import {
   DEFAULT_WINDOW_CONFIG,
   getWeekendWindow,
   type WindowConfig,
 } from './utils/weekendWindow'
+import { isValidTimeZone } from './utils/datetime'
+import { TimeZoneProvider } from './context/TimeZone'
 import { defaultScreen, phaseByKey, PHASES, type ScreenKey } from './utils/phases'
 import { display, value, type SnField } from './utils/fields'
 import { groupTasksByChange, taskProgress } from './utils/progress'
@@ -25,9 +33,10 @@ import {
   SelectValue,
 } from './components/ui/select'
 import { TopNav } from './components/TopNav'
-import { WindowControls } from './components/WindowControls'
+import { WindowControls, DEFAULT_LLM_CONFIG, type LlmConfig } from './components/WindowControls'
 import { StatTiles } from './components/StatTiles'
-import { List as ListIcon, CalendarRange, Table as TableIcon } from 'lucide-react'
+import { List as ListIcon, CalendarRange, Table as TableIcon, Sparkles } from 'lucide-react'
+import { Button } from './components/ui/button'
 import { cn, FOCUS_RING } from './lib/utils'
 import { CenteredState, LoadingSkeletons } from './components/ChangeList'
 import { PlanList } from './components/PlanList'
@@ -43,6 +52,19 @@ import { runDiagnostics } from './utils/diag'
 
 const APP_TITLE = 'Weekend Change Console'
 const CONFIG_KEY = 'wcm.windowConfig'
+const LLM_CONFIG_KEY = 'wcm.llmConfig'
+
+/**
+ * The AI action, named by what it produces on each screen rather than by the
+ * machinery behind it. "Generate" tells a change manager nothing; "Find collisions"
+ * would over-promise one section of the answer. These are the three questions the
+ * console exists to answer, which is why they read as deliverables.
+ */
+const AI_ACTION_LABEL: Record<ScreenKey, string> = {
+  plan: 'Implementation plan',
+  execute: 'Current status',
+  review: 'Post-implementation review',
+}
 
 /**
  * List and Timeline live in the split layout beside the detail pane; Grid takes
@@ -56,12 +78,34 @@ function loadWindowConfig(): WindowConfig {
     const raw = window.localStorage.getItem(CONFIG_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (typeof parsed.startTime === 'string' && typeof parsed.endTime === 'string') return parsed
+      if (typeof parsed.startTime === 'string' && typeof parsed.endTime === 'string') {
+        // Back-compat: a config persisted before the timezone field — or one
+        // carrying a zone Intl can't construct — falls back to the browser
+        // default rather than crashing (Intl throws RangeError on an unknown zone).
+        const timeZone =
+          typeof parsed.timeZone === 'string' && isValidTimeZone(parsed.timeZone)
+            ? parsed.timeZone
+            : DEFAULT_WINDOW_CONFIG.timeZone
+        return { startTime: parsed.startTime, endTime: parsed.endTime, timeZone }
+      }
     }
   } catch {
     /* fall through to default */
   }
   return DEFAULT_WINDOW_CONFIG
+}
+
+function loadLlmConfig(): LlmConfig {
+  try {
+    const raw = window.localStorage.getItem(LLM_CONFIG_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (typeof parsed.endpoint === 'string' && typeof parsed.token === 'string') return parsed
+    }
+  } catch {
+    /* fall through to default */
+  }
+  return DEFAULT_LLM_CONFIG
 }
 
 /**
@@ -168,6 +212,7 @@ export default function App() {
 
   const [weekOffset, setWeekOffset] = useState(0)
   const [windowConfig, setWindowConfig] = useState<WindowConfig>(loadWindowConfig)
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>(loadLlmConfig)
 
   const service = useMemo(() => new ChangeService(), [])
   const { amb, status: ambStatus } = useAmbClient()
@@ -192,10 +237,49 @@ export default function App() {
   // sys_user reads for the person page; caches by sys_id for the session.
   const userService = useMemo(() => new UserService(), [])
 
+  // ---- The AI report ------------------------------------------------------
+  // Every screen sends the SAME complete window to the model and asks a different
+  // question of it (prompts.ts: the phase is a lens, not a filter). So the payload
+  // is assembled once here, from data the console already has on screen, and the
+  // dialog only chooses which question to ask.
+  const [aiOpen, setAiOpen] = useState(false)
+  const llmService = useMemo(() => new LlmService(llmConfig), [llmConfig])
+
+  // The two reads the console doesn't otherwise do window-wide. Both feed findings
+  // that are invisible per-change: CI collisions, and whether a change's Jira is Done.
+  const cis = useWeekendCis(service, changes)
+  const jiraKeys = useMemo(() => jiraIssuesFromTasks(tasks).map((i) => i.key), [tasks])
+  const jiraSummaries = useJiraSummaries(jiraService, jiraKeys)
+
+  const payload = useMemo(
+    () =>
+      buildPayload({
+        weekend: weekendWindow,
+        timeZone: windowConfig.timeZone,
+        changes,
+        tasks,
+        cis,
+        events: feed.events,
+        jiraSummaries,
+      }),
+    [weekendWindow, windowConfig.timeZone, changes, tasks, cis, feed.events, jiraSummaries],
+  )
+
   const updateWindowConfig = useCallback((next: WindowConfig) => {
     setWindowConfig(next)
     try {
       window.localStorage.setItem(CONFIG_KEY, JSON.stringify(next))
+    } catch {
+      /* persistence is best-effort */
+    }
+  }, [])
+
+  // LLM connection settings — persisted plumbing with no consumer yet. Mirrors
+  // updateWindowConfig's write-through-to-localStorage pattern exactly.
+  const updateLlmConfig = useCallback((next: LlmConfig) => {
+    setLlmConfig(next)
+    try {
+      window.localStorage.setItem(LLM_CONFIG_KEY, JSON.stringify(next))
     } catch {
       /* persistence is best-effort */
     }
@@ -450,6 +534,7 @@ export default function App() {
   const listProps = { changes: visible, tasksByChange, selectedId, onOpen: selectChange }
 
   return (
+    <TimeZoneProvider zone={windowConfig.timeZone}>
     <div className="flex h-screen flex-col bg-background">
       <TopNav liveStatus={ambStatus} screen={screen} onScreenChange={selectScreen} />
 
@@ -460,12 +545,32 @@ export default function App() {
             <h1 className="text-display-md text-ink">{phase.headline}</h1>
             <p className="mt-1.5 text-sm text-muted-foreground">{weekendWindow.label}</p>
           </div>
-          <WindowControls
-            weekOffset={weekOffset}
-            onWeekOffset={setWeekOffset}
-            config={windowConfig}
-            onConfigChange={updateWindowConfig}
-          />
+          <div className="flex items-center gap-3">
+            {/* The screen's primary action, and the only coral on the header. Each
+                phase asks the model its own question — the labels are the questions,
+                not a generic "Generate". Disabled until Settings has an endpoint and
+                a token: an action that can only fail is worse than one that isn't there. */}
+            <Button
+              onClick={() => setAiOpen(true)}
+              disabled={!llmService.configured || loading || Boolean(error)}
+              title={
+                llmService.configured
+                  ? undefined
+                  : 'Set an LLM endpoint and token in Settings to enable this'
+              }
+            >
+              <Sparkles className="size-4" aria-hidden />
+              {AI_ACTION_LABEL[phase.key]}
+            </Button>
+            <WindowControls
+              weekOffset={weekOffset}
+              onWeekOffset={setWeekOffset}
+              config={windowConfig}
+              onConfigChange={updateWindowConfig}
+              llmConfig={llmConfig}
+              onLlmConfigChange={updateLlmConfig}
+            />
+          </div>
         </div>
         <StatTiles stats={stats} />
       </header>
@@ -640,7 +745,18 @@ export default function App() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* The weekend report. Generates on open against the current phase's question
+          and the whole window's payload; aborts on close. */}
+      <AiReportDialog
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        screen={phase.key}
+        payload={payload}
+        service={llmService}
+      />
     </div>
+    </TimeZoneProvider>
   )
 }
 

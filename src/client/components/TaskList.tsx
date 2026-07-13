@@ -1,6 +1,7 @@
 import type { TaskRecord } from '../types'
 import { display, value } from '../utils/fields'
 import { formatDayTime, parseSnDate } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { Card } from './ui/card'
 import { TaskStateBadge } from './StateBadge'
 import { JiraKeyChip } from './JiraBadges'
@@ -38,6 +39,7 @@ export function TaskList({
   onOpenPerson?: (personSysId: string) => void
   onOpenChange?: (changeSysId: string) => void
 }) {
+  const zone = useTimeZone()
   if (tasks.length === 0) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">No change tasks for this change.</Card>
@@ -110,7 +112,8 @@ export function TaskList({
               <TaskStateBadge state={t.state} />
               <div className="font-sans text-caption text-body-text">
                 {/* The arrow is a glyph, not content — it stays decorative. */}
-                {formatDayTime(start)} <span className="text-muted-soft">→</span> {formatDayTime(end)}
+                {formatDayTime(start, zone)} <span className="text-muted-soft">→</span>{' '}
+                {formatDayTime(end, zone)}
               </div>
             </div>
           </div>

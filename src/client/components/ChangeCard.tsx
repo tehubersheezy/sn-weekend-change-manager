@@ -4,6 +4,7 @@ import type { Progress } from '../utils/progress'
 import { cn, FOCUS_RING } from '../lib/utils'
 import { display, value } from '../utils/fields'
 import { formatDayTime, parseSnDate } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { Card } from './ui/card'
 import { StateBadge } from './StateBadge'
 import { ProgressBar } from './ProgressBar'
@@ -37,6 +38,7 @@ export function ChangeCard({
   extra?: React.ReactNode
   onOpen: (sysId: string) => void
 }) {
+  const zone = useTimeZone()
   const start = parseSnDate(value(change.start_date))
   const end = parseSnDate(value(change.end_date))
   const meta = metaLine(change)
@@ -84,7 +86,8 @@ export function ChangeCard({
         <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
           <StateBadge state={change.state} />
           <div className="font-sans text-caption text-body-text">
-            {formatDayTime(start)} <span className="text-muted-soft">→</span> {formatDayTime(end)}
+            {formatDayTime(start, zone)} <span className="text-muted-soft">→</span>{' '}
+            {formatDayTime(end, zone)}
           </div>
           <div className="sm:flex sm:justify-end">
             <ProgressBar {...progress} />

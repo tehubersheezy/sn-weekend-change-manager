@@ -3,6 +3,7 @@ import type { ChangeRecord } from '../types'
 import type { WeekendWindow } from '../utils/weekendWindow'
 import { display, value } from '../utils/fields'
 import { formatDayTime, parseSnDate } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { cn, FOCUS_RING } from '../lib/utils'
 import { CenteredState } from './ChangeList'
 
@@ -45,6 +46,7 @@ export function TimelineView({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [tip, setTip] = useState<Tip | null>(null)
+  const zone = useTimeZone()
 
   const ws = win.startLocal.getTime()
   const we = win.endLocal.getTime()
@@ -56,11 +58,11 @@ export function TimelineView({
     const out: { left: number; label: string | null }[] = []
     for (let t = ws; t <= we; t += 6 * HOUR) {
       const labeled = Math.round((t - ws) / HOUR) % 12 === 0
-      out.push({ left: pct(t), label: labeled ? formatDayTime(new Date(t)) : null })
+      out.push({ left: pct(t), label: labeled ? formatDayTime(new Date(t), zone) : null })
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws, we])
+  }, [ws, we, zone])
 
   const now = Date.now()
   const nowLeft = now >= ws && now <= we ? pct(now) : null
@@ -150,7 +152,7 @@ export function TimelineView({
                 // identity is never color-alone.
                 aria-label={`${display(c.number)}: ${display(c.short_description)}. ${display(
                   c.state,
-                )}, ${formatDayTime(startDate)} to ${formatDayTime(endDate)}.`}
+                )}, ${formatDayTime(startDate, zone)} to ${formatDayTime(endDate, zone)}.`}
                 aria-current={selected ? 'true' : undefined}
                 onClick={() => onOpen(id)}
                 onKeyDown={(ev) => {
@@ -222,9 +224,10 @@ export function TimelineView({
             {display(tip.change.short_description)}
           </div>
           <div className="mt-1.5 text-caption text-body-text">
-            {display(tip.change.state)} · {formatDayTime(parseSnDate(value(tip.change.start_date)))}{' '}
+            {display(tip.change.state)} ·{' '}
+            {formatDayTime(parseSnDate(value(tip.change.start_date)), zone)}{' '}
             <span className="text-muted-soft">→</span>{' '}
-            {formatDayTime(parseSnDate(value(tip.change.end_date)))}
+            {formatDayTime(parseSnDate(value(tip.change.end_date)), zone)}
           </div>
         </div>
       )}

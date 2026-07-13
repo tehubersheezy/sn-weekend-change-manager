@@ -204,6 +204,15 @@ motion:
   duration-entrance: 220ms   # content arrival (rise-in: fade + 4px rise)
   duration-open: 200ms       # dialog open — exits run ~75% (150ms)
   stagger: 20ms              # list-row entrance step, capped at 12 rows (240ms ceiling)
+  # THE ONE AMBIENT LOOP (amendment 2026-07, owner's instruction): the AI report's
+  # thinking state. It is the sole `linear` timing and the sole infinite animation
+  # in the system, and both departures are deliberate — an eased loop stutters at
+  # its own seam, and a model that reports no progress can only be expressed as
+  # indeterminate. Bound to the headline that states the wait, so it conveys state
+  # rather than decorating one. Not a precedent; see Interaction: Hover & Motion >
+  # The ambient loop.
+  ease-ambient: "linear"
+  duration-ambient: 3600ms
 
 components:
   button-primary:
@@ -966,11 +975,34 @@ The system is five `--animate-*` tokens in `theme.css` plus a retuned Tailwind d
 - **`animate-fade-in`** (150ms crossfade): lateral moves — tab panels and select menus. A tab switch is a move between siblings, so the panel fades in place rather than rising. Menus close instantly on purpose.
 - **`animate-dialog-in` / `-out`** (200ms/150ms, scale 0.97 ⇄ 1): the window-settings dialog and the grid popout. The keyframes bake in the `-50%` centering translate, because an animation owns `transform` for its whole run.
 - **Live means quiet, and now it means *seen*.** The feed keys rows by event id, so a silent refetch keeps existing DOM and only a genuinely new event mounts — rising in at the top with zero delay: the arrival is the telemetry, no toast. Badges carry `transition-colors` in their base, so when AMB moves a change's state the pill's hue *glides* to the new meaning on the same DOM node. The task progress bar's width glides (300ms) instead of teleporting.
-- **One kinetic accent, total.** The change card's arrow leans 2px toward where the card will take you (`group-hover`). That is the delight budget; nothing else moves on hover.
+- **One kinetic accent, total.** The change card's arrow leans 2px toward where the card will take you (`group-hover`). That is the delight budget; nothing else moves on hover. (One further accent has since been admitted — the AI report's thinking sweep — and it is *not* a hover state. See The ambient loop below for what it had to prove to get in.)
 
 **Reduced motion is the law.** `theme.css` ends with an unlayered `prefers-reduced-motion` block: every transform-carrying animation and transition collapses to `none` (entrances, the dialog scale, crossfades, the arrow nudge, the width glide) while pure colour transitions stay — a hue shift is not motion, and it remains useful feedback. `animation: none` rather than a near-zero duration matters for the dialog: Radix unmounts a closing dialog immediately when no exit animation is running, which is exactly the instant close a reduced-motion user asked for.
 
 **What this system deliberately does not do:** no hover scaling or lifting (hue is the language, and there are no shadows to lift with), no skeleton flashes on live refetches, no scroll-triggered reveals, no spinner replacing content, no motion on the stat chips or headers at load. A console is glanced at for sixty hours straight; the motion budget is spent where state actually changes.
+
+### The ambient loop: one exception, and what it cost to earn
+
+*An amendment (2026-07, owner's instruction). Motion above rules "one kinetic accent, total" and "no spinner replacing content." The AI report dialog (`AiThinking`) introduces a second kinetic accent and a continuous loop. The rules are not waived — the exception is bounded, and it is bounded by the same test the rules were: **motion conveys state, never decoration.***
+
+**The state it conveys is that we are blind.** A language model reading the whole weekend window takes 10–30 seconds and reports *nothing* back until its first token. The console has no progress to show, and every conventional way of filling that wait is a lie: a percentage is invented, a stage list ("cross-referencing CIs…") narrates work we cannot observe, a determinate bar fabricates a denominator that does not exist. **Indeterminate, alive and unhurried is the only honest thing to say**, and an ambient loop is what "indeterminate" looks like. Stillness would say *hung*; a bar would say *false*.
+
+So the loop is admitted, and everything it might have been used to fake is banned instead:
+
+- **The copy is driven by real counts.** The panel states the manifest it actually sent — 110 changes, 242 change tasks, 31 affected CIs — as a **list, never a sequence**. Nothing ticks, nothing completes, nothing lights up in turn. A row that illuminated per stratum would be the stage lie wearing the honest design's clothes.
+- **Elapsed seconds is the only progress readout**, because it is the only one that is true. Past 30s it says so.
+- **The one real event gets spent as one.** First token flips the headline's verb (reading → writing) and recedes the manifest **chromatically** (ink → `{colors.muted}`). State changes stay colour changes; the motion is not asked to carry meaning it doesn't have.
+
+**The accent is bound to the sentence.** A warm `{colors.primary-ink}` band drifts through the serif headline itself (`background-clip: text`) — through the one line that says what is happening. It is not an ornament beside the state; it *is* the state, rendered. That binding is what keeps it inside the rule rather than beside it. It is also why the band is the **ink** step and not `{colors.primary}`: the sweep repaints real headline glyphs, so it is TYPE, and coral as type is 3.1:1. `{colors.primary-ink}` holds 4.8:1 — the headline clears AA at every *frame*, not merely at rest.
+
+**Two departures from `motion:`, recorded rather than smuggled:**
+
+- **`linear`, not ease-out-quart.** The only linear timing in the app. An eased loop lurches: `from` and `to` are discontinuous across the loop seam, so a curve that ends slow and restarts fast stutters once per cycle. Constant velocity is the only thing that drifts. (The band also sits fully off the text at both ends of its range, which hides the seam a second time.)
+- **A fourth time band: 3600ms.** Slower than anything else here, deliberately — this is the opposite of urgency theater. The band passes for ~2s and the headline rests for ~1.6s.
+
+**Reduced motion is still the law, and this is the case that proves it.** Killing an infinite gradient sweep normally leaves a headline frozen half-lit — a broken artifact, worse than no animation. It doesn't here, because the still state was designed first: the `thinking-sweep` utility rests at `opacity: 0` and only the keyframes raise it, so `animation: none` removes the sweep layer and reveals the plain ink serif headline beneath — whole, still, legible. **A reduced-motion user loses no information, because the sweep was never carrying any**: the counts, the copy and the (non-moving) elapsed clock hold every real signal the panel has. If a future ambient loop cannot pass that test — *delete the animation, is the surface still complete and honest?* — it has not earned the exception.
+
+**This is not a precedent for ambient motion generally.** It is admitted to express *one* thing the console had no way to express — a wait we cannot measure — exactly as `{colors.jira-canvas}` was admitted to express a semantic the palette had no way to express. A loop that decorates a surface which already knows its own state is still forbidden, and there is no second exception pending.
 
 ## Do's and Don'ts
 

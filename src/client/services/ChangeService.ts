@@ -1,6 +1,6 @@
 import type { AffectedCiRecord, ChangeRecord, TaskRecord } from '../types'
 import type { WeekendWindow } from '../utils/weekendWindow'
-import { tableQuery } from './tableApi'
+import { chunkIds, tableQuery } from './tableApi'
 
 const CHANGE_FIELDS = [
   'sys_id',
@@ -43,6 +43,13 @@ const CI_FIELDS = [
   'ci_item.sys_class_name',
   'ci_item.operational_status',
 ].join(',')
+
+/**
+ * Same CI read, plus the parent change. The per-change query filters on
+ * task=<sys_id> and so already knows whose CI each row is; a window-wide read
+ * gets every change's CIs in one go and has to carry the grouping key back.
+ */
+const CI_WINDOW_FIELDS = `${CI_FIELDS},task`
 
 /**
  * Encoded query for change_request rows overlapping the window. Shared by the
@@ -131,6 +138,34 @@ export class ChangeService {
       sysparm_query: `task=${changeSysId}^ORDERBYci_item`,
     })
     return this.query<AffectedCiRecord>('task_ci', params)
+  }
+
+  /**
+   * Affected CIs for MANY changes at once — the whole weekend's blast radius.
+   *
+   * The per-change listAffectedCis is a round-trip each; over a 110-change window
+   * that is 110 requests, which is why this exists. It cannot be a single IN-list
+   * either: the instance's front proxy 414s somewhere under ~11.5KB of URI, and a
+   * full window's sys_ids blow straight through that. chunkIds caps each clause at
+   * 80 ids (~2.6KB, verified) and the chunks are fetched in parallel.
+   *
+   * Rows come back carrying `task` (the CHANGE sys_id) so the caller can group
+   * them; there is no other way to tell whose CI is whose in a merged result.
+   */
+  async listWeekendAffectedCis(changeSysIds: string[]): Promise<AffectedCiRecord[]> {
+    const ids = changeSysIds.filter(Boolean)
+    if (!ids.length) return []
+
+    const chunks = await Promise.all(
+      chunkIds(ids).map((chunk) => {
+        const params = new URLSearchParams({
+          sysparm_fields: CI_WINDOW_FIELDS,
+          sysparm_query: `taskIN${chunk.join(',')}^ORDERBYci_item`,
+        })
+        return this.query<AffectedCiRecord>('task_ci', params)
+      }),
+    )
+    return chunks.flat()
   }
 
   /** All change_task rows whose planned window overlaps the weekend — one call. */

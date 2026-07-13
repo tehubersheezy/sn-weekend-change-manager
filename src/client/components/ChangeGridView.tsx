@@ -11,6 +11,7 @@ import type { ChangeRecord, TaskRecord } from '../types'
 import { cn, FOCUS_RING } from '../lib/utils'
 import { display, value, type SnField } from '../utils/fields'
 import { formatDateTime, parseSnDate } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { jiraIssuesFromTasks } from './JiraList'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -57,6 +58,7 @@ const EMPTY = '—'
 function buildRows(
   changes: ChangeRecord[],
   tasksByChange: Map<string, TaskRecord[]>,
+  zone: string,
 ): GridRow[] {
   return changes.map((c) => {
     const sysId = value(c.sys_id)
@@ -80,8 +82,8 @@ function buildRows(
       sysId,
       number: display(c.number) || EMPTY,
       description: display(c.short_description) || 'Untitled change',
-      start: formatDateTime(parseSnDate(value(c.start_date))),
-      end: formatDateTime(parseSnDate(value(c.end_date))),
+      start: formatDateTime(parseSnDate(value(c.start_date)), zone),
+      end: formatDateTime(parseSnDate(value(c.end_date)), zone),
       assignee: display(c.assigned_to) || EMPTY,
       assigneeId: value(c.assigned_to),
       tasks,
@@ -168,7 +170,8 @@ export function ChangeGridView({
   onOpenPerson: (personSysId: string) => void
   onOpenTask: (taskSysId: string, changeSysId: string) => void
 }) {
-  const rows = useMemo(() => buildRows(changes, tasksByChange), [changes, tasksByChange])
+  const zone = useTimeZone()
+  const rows = useMemo(() => buildRows(changes, tasksByChange, zone), [changes, tasksByChange, zone])
 
   const columns = useMemo(
     () => [

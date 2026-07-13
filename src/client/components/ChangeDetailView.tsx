@@ -7,7 +7,8 @@ import type { SnowAmb } from '../services/SnowAmb'
 import { useRecordWatch } from '../hooks/useAmb'
 import { useJiraSummaries } from '../hooks/useJiraSummaries'
 import { display, value } from '../utils/fields'
-import { formatDateTime, parseSnDate } from '../utils/datetime'
+import { formatDateTime, parseSnDate, zoneAbbreviation } from '../utils/datetime'
+import { useTimeZone } from '../context/TimeZone'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
@@ -62,6 +63,7 @@ export function ChangeDetailView({
   /** Open a person's page in this surface. */
   onOpenPerson?: (personSysId: string) => void
 }) {
+  const zone = useTimeZone()
   const [change, setChange] = useState<ChangeRecord | null>(null)
   const [tasks, setTasks] = useState<TaskRecord[]>([])
   const [cis, setCis] = useState<AffectedCiRecord[]>([])
@@ -115,6 +117,10 @@ export function ChangeDetailView({
 
   const start = change && parseSnDate(value(change.start_date))
   const end = change && parseSnDate(value(change.end_date))
+  // Abbreviation taken at whichever end is scheduled (start preferred); omitted
+  // when the change carries no planned dates so the row reads '— → —' cleanly.
+  const windowInstant = start || end
+  const dateAbbr = windowInstant ? zoneAbbreviation(zone, windowInstant) : ''
 
   const closed = !!change && value(change.state) === '3'
   const hasPlans =
@@ -185,7 +191,8 @@ export function ChangeDetailView({
               )}
               <span>{display(change.assignment_group) || 'No assignment group'}</span>
               <span>
-                {formatDateTime(start)} → {formatDateTime(end)} ET
+                {formatDateTime(start, zone)} → {formatDateTime(end, zone)}
+                {dateAbbr && ` ${dateAbbr}`}
               </span>
             </div>
           </header>
