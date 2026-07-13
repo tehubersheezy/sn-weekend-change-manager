@@ -8,19 +8,26 @@ import { getIssue, listIssues } from '../server/jira'
  * Change tasks name Jira issues (the key rides on change_task.correlation_display),
  * and these two routes turn those keys into issues the console can RENDER — a
  * weekend operator reads the ticket behind a task without leaving the console and
- * without a Jira account.
+ * without a Jira account. Each route answers with an `issue` from Jira and the
+ * `references` from this instance, side by side: which weekend change tasks depend
+ * on this issue is the question the real Jira page cannot answer, and it is the
+ * reason the surface exists.
  *
  * This REPLACES a route that resolved keys into Jira browse URLs, and the
  * `x_912401_weekend_c.jira_base_url` property that fed it is deliberately gone
- * with it. Linking out was the wrong capability — it knew a key existed and then
- * handed the user off — and a property an admin can set that changes nothing is
- * worse than no property at all. Removing it here removes it from the instance
- * on the next install.
+ * with it (removing it here removes it from the instance on the next install).
+ * Linking out was the wrong capability — it knew a key existed and then handed
+ * the user off.
  *
- * There is no Jira attached to this instance, so the ISSUE half of the payload is
- * mock (fixtures in src/server/jira.ts). The REFERENCES half — which weekend
- * change tasks name this issue — is real, live, and ACL-checked. See that file's
- * header for the seam, and for where a live Jira callout would slot in.
+ * CONFIG ARRIVES ON THE REQUEST, NOT FROM THE INSTANCE. Each route reads two
+ * headers — X-Jira-Url and X-Jira-Token (a personal access token, sent on to Jira
+ * as Bearer auth) — declared below so they show up in the API explorer. They are
+ * owned by the console's Settings dialog and live in the operator's browser: no
+ * system property, no credential record, nothing on the instance for an admin to
+ * set on everyone else's behalf. Headers and not query params, because a token in
+ * a query string is written to the transaction log, the proxy access log, and
+ * browser history. Without them the routes serve the fixtures in src/server/jira.ts,
+ * which is what keeps the demo working on an instance with no Jira attached.
  *
  * Auth flags stay at Fluent's defaults, matching the activity route:
  * requires_authentication, requires_acl_authorization and requires_snc_internal_role
@@ -54,6 +61,24 @@ RestApi({
                     shortDescription: 'Comma-separated Jira issue keys.',
                 },
             ],
+            headers: [
+                {
+                    $id: Now.ID['jira-rest-issues-url-header'],
+                    name: 'X-Jira-Url',
+                    required: false,
+                    exampleValue: 'https://jira.example.com',
+                    shortDescription:
+                        'Jira base URL. Omit it (with the token) to serve fixtures instead.',
+                },
+                {
+                    $id: Now.ID['jira-rest-issues-token-header'],
+                    name: 'X-Jira-Token',
+                    required: false,
+                    exampleValue: 'a Jira personal access token',
+                    shortDescription:
+                        'Jira personal access token, sent on to Jira as Bearer auth. Never a query param.',
+                },
+            ],
         },
         {
             $id: Now.ID['jira-rest-issue'],
@@ -70,6 +95,24 @@ RestApi({
                     required: true,
                     exampleValue: 'NET-4451',
                     shortDescription: 'A single Jira issue key.',
+                },
+            ],
+            headers: [
+                {
+                    $id: Now.ID['jira-rest-issue-url-header'],
+                    name: 'X-Jira-Url',
+                    required: false,
+                    exampleValue: 'https://jira.example.com',
+                    shortDescription:
+                        'Jira base URL. Omit it (with the token) to serve fixtures instead.',
+                },
+                {
+                    $id: Now.ID['jira-rest-issue-token-header'],
+                    name: 'X-Jira-Token',
+                    required: false,
+                    exampleValue: 'a Jira personal access token',
+                    shortDescription:
+                        'Jira personal access token, sent on to Jira as Bearer auth. Never a query param.',
                 },
             ],
         },

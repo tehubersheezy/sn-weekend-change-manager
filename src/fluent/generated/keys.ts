@@ -42,6 +42,14 @@ declare global {
                         table: 'sys_ws_query_parameter'
                         id: 'a49ab865321643f996af8e5eb4ac0371'
                     }
+                    'jira-rest-issue-token-header': {
+                        table: 'sys_ws_header'
+                        id: 'c7d79ccbf2a540219eef3b6685cbc54c'
+                    }
+                    'jira-rest-issue-url-header': {
+                        table: 'sys_ws_header'
+                        id: 'deac2220a6ee46d6bd74c4d2cc7b7fa2'
+                    }
                     'jira-rest-issues': {
                         table: 'sys_ws_operation'
                         id: 'f5470b55e4804677a55da7ab59991601'
@@ -49,6 +57,14 @@ declare global {
                     'jira-rest-issues-keys': {
                         table: 'sys_ws_query_parameter'
                         id: 'b0af7975d4934246869810058f8994ba'
+                    }
+                    'jira-rest-issues-token-header': {
+                        table: 'sys_ws_header'
+                        id: 'd1a04d164c7d427782bd4b6b0780b0f0'
+                    }
+                    'jira-rest-issues-url-header': {
+                        table: 'sys_ws_header'
+                        id: '4cae81bfda0d48dea08eba48c0cff45f'
                     }
                     package_json: {
                         table: 'sys_module'
@@ -179,6 +195,28 @@ declare global {
                         }
                     },
                     {
+                        table: 'sys_ux_lib_asset'
+                        id: '1c44202c4a0e4a91b3abf0e2c3248110'
+                        key: {
+                            name: 'x_912401_weekend_c/node.browser-0Yo33bIn.js.map'
+                        }
+                    },
+                    {
+                        table: 'sys_ux_lib_asset'
+                        id: '248f6994cf8141bb877beed17675360a'
+                        key: {
+                            name: 'x_912401_weekend_c/node.browser-0Yo33bIn'
+                        }
+                    },
+                    {
+                        table: 'sys_ws_header_map'
+                        id: '2656aecb608a4b8e8a6647be171223ac'
+                        key: {
+                            web_service_operation: 'f5470b55e4804677a55da7ab59991601'
+                            web_service_header: 'd1a04d164c7d427782bd4b6b0780b0f0'
+                        }
+                    },
+                    {
                         table: 'sn_glider_source_artifact_m2m'
                         id: '293b582c3b624232b9a530a0ea946030'
                         key: {
@@ -235,6 +273,14 @@ declare global {
                         key: {
                             application_file: '0008999bd1d047eda773941597471c86'
                             source_artifact: 'bc060fadf8e54293a39439ed0da26f47'
+                        }
+                    },
+                    {
+                        table: 'sys_ws_header_map'
+                        id: '52553ce68214406eadfe26bf7346fd7e'
+                        key: {
+                            web_service_operation: 'f5470b55e4804677a55da7ab59991601'
+                            web_service_header: '4cae81bfda0d48dea08eba48c0cff45f'
                         }
                     },
                     {
@@ -313,6 +359,14 @@ declare global {
                         }
                     },
                     {
+                        table: 'sys_ws_header_map'
+                        id: '673bf4b720194e019a41e85e07bfea6f'
+                        key: {
+                            web_service_operation: 'f02bd044b0254db18a5a846c65cf8cb2'
+                            web_service_header: 'deac2220a6ee46d6bd74c4d2cc7b7fa2'
+                        }
+                    },
+                    {
                         table: 'sn_glider_source_artifact_m2m'
                         id: '6901df6567a849148adedfda71147dad'
                         deleted: true
@@ -387,6 +441,14 @@ declare global {
                         key: {
                             application_file: '75d1676e00f4443d9b469d03b9031964'
                             source_artifact: 'bc060fadf8e54293a39439ed0da26f47'
+                        }
+                    },
+                    {
+                        table: 'sys_ws_header_map'
+                        id: '8bc16fec2ab14257b13acf8cc1a23159'
+                        key: {
+                            web_service_operation: 'f02bd044b0254db18a5a846c65cf8cb2'
+                            web_service_header: 'c7d79ccbf2a540219eef3b6685cbc54c'
                         }
                     },
                     {

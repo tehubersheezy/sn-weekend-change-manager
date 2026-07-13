@@ -33,7 +33,13 @@ import {
   SelectValue,
 } from './components/ui/select'
 import { TopNav } from './components/TopNav'
-import { WindowControls, DEFAULT_LLM_CONFIG, type LlmConfig } from './components/WindowControls'
+import {
+  WindowControls,
+  DEFAULT_LLM_CONFIG,
+  DEFAULT_JIRA_CONFIG,
+  type LlmConfig,
+  type JiraConfig,
+} from './components/WindowControls'
 import { StatTiles } from './components/StatTiles'
 import { List as ListIcon, CalendarRange, Table as TableIcon, Sparkles } from 'lucide-react'
 import { Button } from './components/ui/button'
@@ -53,6 +59,7 @@ import { runDiagnostics } from './utils/diag'
 const APP_TITLE = 'Weekend Change Console'
 const CONFIG_KEY = 'wcm.windowConfig'
 const LLM_CONFIG_KEY = 'wcm.llmConfig'
+const JIRA_CONFIG_KEY = 'wcm.jiraConfig'
 
 /**
  * The AI action, named by what it produces on each screen rather than by the
@@ -106,6 +113,19 @@ function loadLlmConfig(): LlmConfig {
     /* fall through to default */
   }
   return DEFAULT_LLM_CONFIG
+}
+
+function loadJiraConfig(): JiraConfig {
+  try {
+    const raw = window.localStorage.getItem(JIRA_CONFIG_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (typeof parsed.baseUrl === 'string' && typeof parsed.token === 'string') return parsed
+    }
+  } catch {
+    /* fall through to default */
+  }
+  return DEFAULT_JIRA_CONFIG
 }
 
 /**
@@ -213,6 +233,7 @@ export default function App() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [windowConfig, setWindowConfig] = useState<WindowConfig>(loadWindowConfig)
   const [llmConfig, setLlmConfig] = useState<LlmConfig>(loadLlmConfig)
+  const [jiraConfig, setJiraConfig] = useState<JiraConfig>(loadJiraConfig)
 
   const service = useMemo(() => new ChangeService(), [])
   const { amb, status: ambStatus } = useAmbClient()
@@ -232,7 +253,11 @@ export default function App() {
 
   // Shared by the feed, the Jiras tab and the Jira detail pane, so a key that
   // appears on all three resolves once.
-  const jiraService = useMemo(() => new JiraService(), [])
+  // Rebuilt whenever the Jira connection changes, which also throws away the
+  // service's key→summary cache — a key resolved against a typo'd URL must not
+  // survive the fix. The service never calls Jira itself; it forwards these to
+  // the scoped route as headers, and the INSTANCE makes the callout.
+  const jiraService = useMemo(() => new JiraService(jiraConfig), [jiraConfig])
 
   // sys_user reads for the person page; caches by sys_id for the session.
   const userService = useMemo(() => new UserService(), [])
@@ -280,6 +305,19 @@ export default function App() {
     setLlmConfig(next)
     try {
       window.localStorage.setItem(LLM_CONFIG_KEY, JSON.stringify(next))
+    } catch {
+      /* persistence is best-effort */
+    }
+  }, [])
+
+  // Jira connection. Same write-through pattern, different destination: this pair
+  // is forwarded to our own scoped route as headers and used SERVER-side, because
+  // a browser cannot reach a corporate Jira. Empty is valid — the route falls back
+  // to its fixtures and the demo still runs.
+  const updateJiraConfig = useCallback((next: JiraConfig) => {
+    setJiraConfig(next)
+    try {
+      window.localStorage.setItem(JIRA_CONFIG_KEY, JSON.stringify(next))
     } catch {
       /* persistence is best-effort */
     }
@@ -569,6 +607,8 @@ export default function App() {
               onConfigChange={updateWindowConfig}
               llmConfig={llmConfig}
               onLlmConfigChange={updateLlmConfig}
+              jiraConfig={jiraConfig}
+              onJiraConfigChange={updateJiraConfig}
             />
           </div>
         </div>

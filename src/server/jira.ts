@@ -1,40 +1,57 @@
-import { GlideRecordSecure } from '@servicenow/glide'
+import { GlideRecordSecure, gs } from '@servicenow/glide'
+import { RESTMessageV2 } from '@servicenow/glide/sn_ws'
 
 /**
  * The console's Jira surface, served from the app's own scope.
  *
  * WHAT THIS IS. Change tasks name Jira issues — the key rides on
- * change_task.correlation_display (e.g. NET-4451). This route turns those keys
+ * change_task.correlation_display (e.g. NET-4451). These routes turn those keys
  * into issues the console can RENDER, so a weekend operator can read the ticket
  * behind a task without leaving the console and without a Jira account.
  *
- * It replaces an earlier route that resolved keys into Jira BROWSE URLS. That
+ * They replace an earlier route that resolved keys into Jira BROWSE URLS. That
  * was the wrong capability: it knew a key existed and then handed the user off.
- * Nothing of it survives — the jira_base_url property it depended on is gone too,
- * because config an admin can set that changes nothing is worse than no config.
  *
  * TWO SOURCES, AND THE SEAM BETWEEN THEM IS THE POINT.
  *
- *   The ISSUE is mock. There is no Jira attached to this instance, so the
- *   Jira-side fields (summary, status, assignee, sprint, comments…) are the
- *   fixtures in ISSUES below. They are hand-authored against the 20 real keys
- *   the seeded change tasks actually carry, so statuses track their tasks: a
- *   Jira issue backing a closed change task reads Done.
- *
- *   The REFERENCES are real. readReferences() queries change_task for this key
+ *   The ISSUE comes from Jira, over an outbound callout made by this route.
+ *   The REFERENCES come from this instance. They are siblings on the wire, never
+ *   nested, because they are answers from two different systems and either can be
+ *   present without the other. readReferences() queries change_task for the key
  *   and joins the parent change — live, ACL-checked, no fixtures. "Which weekend
  *   change tasks depend on this issue" is a question the real Jira page CANNOT
  *   answer, and it is the entire reason a Jira page exists inside this console.
  *
- * The wire shape keeps them apart: `issue` and `references` are siblings, never
- * nested, because they come from different systems and one can be absent while
- * the other is present. An unrecognized key is NOT an error — it answers
- * issue: null with its references intact, and the console says so.
+ * An unrecognized key is NOT an error: it answers issue: null with its references
+ * intact, and the console says so. A key that Jira does not have is still a key a
+ * change task is depending on, which is worth showing.
  *
- * WIRING A REAL JIRA. Replace findIssue() with an sn_ws.RESTMessageV2 callout to
- * {base}/rest/api/3/issue/{key} behind a credential alias, and map the response
- * into JiraIssueDetail. Nothing else in this file — and nothing at all in the
- * client — has to change. That is what the seam is for.
+ * WHERE THE CONFIG LIVES: THE REQUEST, NOT THE INSTANCE. The Jira base URL and a
+ * personal access token arrive on every call as request HEADERS —
+ *
+ *   X-Jira-Url     https://jira.example.com   (trailing slash tolerated)
+ *   X-Jira-Token   a Jira personal access token, sent on as Bearer auth
+ *
+ * — because the console's Settings dialog owns them and keeps them in the
+ * operator's browser. Nothing is stored on the instance: no system property, no
+ * credential record, nothing for an admin to set and nothing for the next person
+ * to inherit. (A `jira_base_url` property once existed for the link-out route and
+ * is deliberately deleted; config that only an admin can change was the wrong
+ * shape for a surface each operator points at their own Jira.) They are HEADERS
+ * and not query params on purpose — a token in a query string is written to the
+ * ServiceNow transaction log, the front proxy's access log, and browser history.
+ *
+ * PATs mean Jira Data Center / Server, so this calls REST API **v2**. Not v3:
+ * that is Cloud-only and returns descriptions and comment bodies as ADF
+ * (Atlassian Document Format) JSON rather than the plain strings these interfaces
+ * — and the console's renderer — are built on.
+ *
+ * NO HEADERS, NO CALLOUT. With either header missing, both routes fall back to
+ * the ISSUES fixtures below. dev421992 has no Jira attached, so the fixtures are
+ * what keeps the deployed demo honest and working when nothing is configured;
+ * they are hand-authored against the 20 real keys the seeded change tasks carry,
+ * so their statuses track their tasks. Configured-but-broken is NOT the same
+ * thing and never falls back — see getIssue/listIssues for how each fails.
  *
  * DIALECT. This file stays inside the same conservative ES5 subset as
  * src/server/activity.ts: no arrow functions, no template literals, no spread,
@@ -52,7 +69,39 @@ const KEY_PATTERN = /^[A-Z][A-Z0-9_]*-[0-9]+$/
 /** Most keys one batch call will resolve. The console asks per visible screen. */
 const BATCH_LIMIT = 100
 
+/** A configured base URL has to be absolute — we concatenate a path onto it. */
+const ABSOLUTE_URL = /^https?:\/\/[^\s]+$/
+
+/** Jira DC's REST API. v2 (not v3) because a PAT means Data Center — see the header. */
+const JIRA_API = '/rest/api/2'
+
+/** Outbound call ceiling. A weekend operator waits on this synchronously. */
+const HTTP_TIMEOUT_MS = 15000
+
+/** Most comments we render on one issue, newest-biased (we keep the last N). */
+const COMMENT_LIMIT = 50
+
+/** The only fields a summary needs. Asking for more would just cost payload. */
+const SUMMARY_FIELDS = 'summary,issuetype,status,priority,assignee'
+
 type JiraStatusCategory = 'todo' | 'in-progress' | 'done'
+
+/** Per-request Jira config, read off the headers. Absent config is not an error. */
+interface JiraConfig {
+    /** Absolute, no trailing slash. */
+    baseUrl: string
+    token: string
+}
+
+/** The outcome of one callout, flattened so callers never touch RESTMessageV2. */
+interface JiraHttpResult {
+    /** The HTTP status Jira answered with, or 0 when the call never got there. */
+    status: number
+    /** Parsed JSON body on a 2xx, else null. */
+    data: any
+    /** Empty on success. Never contains the token. */
+    error: string
+}
 
 /** A Jira comment. `when` is a ServiceNow UTC datetime so the client can parse it. */
 interface JiraComment {
@@ -724,8 +773,390 @@ function queryParam(request: any, name: string): string {
     return String(raw)
 }
 
-/** The mock lookup. A real Jira would replace exactly this function — see the file header. */
-function findIssue(key: string): JiraIssueDetail | null {
+/**
+ * Read a request header as a plain string.
+ *
+ * getHeader() is the documented accessor and is case-insensitive, but the raw
+ * `headers` map is keyed by whatever casing the caller sent and can hand back an
+ * array, exactly like queryParams does. Try the accessor, then walk the map.
+ */
+function header(request: any, name: string): string {
+    if (!request) return ''
+
+    if (typeof request.getHeader === 'function') {
+        const direct = request.getHeader(name)
+        if (direct) return String(direct).trim()
+        const lowered = request.getHeader(name.toLowerCase())
+        if (lowered) return String(lowered).trim()
+    }
+
+    const headers = request.headers
+    if (!headers) return ''
+    const wanted = name.toLowerCase()
+    const sent = Object.keys(headers)
+    for (let i = 0; i < sent.length; i++) {
+        if (sent[i].toLowerCase() !== wanted) continue
+        const value = headers[sent[i]]
+        if (value === undefined || value === null) return ''
+        if (typeof value === 'string') return value.trim()
+        if (typeof value.join === 'function') return String(value.join(',')).trim()
+        return String(value).trim()
+    }
+    return ''
+}
+
+/**
+ * The Jira config for THIS request, or null when the caller sent none.
+ *
+ * Null is the ordinary, expected case on dev421992: no Jira is attached, the
+ * Settings dialog is empty, and both routes serve fixtures. The base URL may
+ * arrive with a trailing slash (people paste it out of a browser) — strip it,
+ * because every path below is concatenated straight onto it.
+ */
+function readConfig(request: any): JiraConfig | null {
+    let url = header(request, 'X-Jira-Url')
+    const token = header(request, 'X-Jira-Token')
+    if (!url || !token) return null
+
+    while (url.length > 0 && url.charAt(url.length - 1) === '/') {
+        url = url.slice(0, url.length - 1)
+    }
+    if (!url) return null
+
+    return { baseUrl: url, token: token }
+}
+
+/**
+ * One GET against Jira, with the PAT as Bearer auth.
+ *
+ * Every failure mode lands in the return value rather than an exception, because
+ * the two routes want to fail DIFFERENTLY (the detail payload is the page; the
+ * summaries are decoration) and that decision belongs to them, not here.
+ *
+ * The status is read before haveError() is trusted: a 404 is a perfectly good
+ * answer from Jira, and only a call that never produced a status at all — DNS,
+ * TLS, timeout — is a transport error.
+ */
+function jiraGet(config: JiraConfig, path: string): JiraHttpResult {
+    try {
+        const message = new RESTMessageV2()
+        message.setHttpMethod('GET')
+        message.setEndpoint(config.baseUrl + path)
+        // A PAT is a Bearer token in Jira DC — not basic auth, and never a query param.
+        message.setRequestHeader('Authorization', 'Bearer ' + config.token)
+        message.setRequestHeader('Accept', 'application/json')
+        message.setHttpTimeout(HTTP_TIMEOUT_MS)
+
+        const response = message.execute()
+        const status = Number(response.getStatusCode() || 0)
+
+        if (!status || isNaN(status)) {
+            const transport = response.haveError() ? String(response.getErrorMessage() || '') : ''
+            return { status: 0, data: null, error: transport || 'Jira did not answer' }
+        }
+        if (status < 200 || status >= 300) {
+            return { status: status, data: null, error: 'Jira answered HTTP ' + status }
+        }
+
+        const body = String(response.getBody() || '')
+        try {
+            return { status: status, data: JSON.parse(body), error: '' }
+        } catch (parseFailure) {
+            return { status: status, data: null, error: 'Jira answered with a body that is not JSON' }
+        }
+    } catch (callFailure) {
+        // The token rides in a header, never in the endpoint, so nothing an
+        // exception carries can leak it into a log line.
+        return { status: 0, data: null, error: String(callFailure) }
+    }
+}
+
+/** '' for null/undefined, so a missing Jira field renders as empty and not "null". */
+function text(value: any): string {
+    return value === undefined || value === null ? '' : String(value)
+}
+
+/** issuetype / status / priority / resolution are all `{ name }` — and all nullable. */
+function named(value: any): string {
+    return value && value.name ? String(value.name) : ''
+}
+
+/** assignee and reporter are frequently null. Reading .displayName blind is a 500. */
+function personName(value: any): string {
+    return value && value.displayName ? String(value.displayName) : ''
+}
+
+/**
+ * Jira's three status-category keys are 'new' | 'indeterminate' | 'done'; the
+ * console's are 'todo' | 'in-progress' | 'done'. Anything unrecognized lands on
+ * 'todo' — an unknown status reads as not-started, which is the safe lie.
+ */
+function statusCategoryOf(status: any): JiraStatusCategory {
+    const key =
+        status && status.statusCategory && status.statusCategory.key
+            ? String(status.statusCategory.key).toLowerCase()
+            : ''
+    if (key === 'done') return 'done'
+    if (key === 'indeterminate') return 'in-progress'
+    return 'todo'
+}
+
+/** '2026-07-10T18:41:33.000+0000' or '...Z' — Jira's ISO-8601, offset colon optional. */
+const JIRA_DATETIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/
+
+function pad2(value: number): string {
+    return value < 10 ? '0' + value : String(value)
+}
+
+/**
+ * Jira ISO-8601 -> ServiceNow UTC 'YYYY-MM-DD HH:MM:SS'.
+ *
+ * The client parses every date in this payload with parseSnDate, which accepts
+ * ONLY the ServiceNow format — and Jira's '+0000' offset (no colon) is not even
+ * valid input to a strict Date.parse, so there is no shortcut here. Parse it
+ * explicitly, subtract the offset to get true UTC, and re-emit.
+ *
+ * The sign is the part that ships bugs: a stamp reading 18:41 at -0400 happened
+ * at 22:41 UTC, so UTC = wall-clock MINUS the offset.
+ */
+function toSnDate(raw: any): string {
+    const value = text(raw).trim()
+    if (!value) return ''
+
+    const parts = JIRA_DATETIME.exec(value)
+    if (!parts) return ''
+
+    let offsetMinutes = 0
+    const zone = parts[7]
+    if (zone && zone !== 'Z') {
+        const sign = zone.charAt(0) === '-' ? -1 : 1
+        const digits = zone.slice(1).replace(':', '')
+        const zoneHours = parseInt(digits.slice(0, 2), 10)
+        const zoneMinutes = parseInt(digits.slice(2, 4), 10)
+        offsetMinutes =
+            sign * ((isNaN(zoneHours) ? 0 : zoneHours) * 60 + (isNaN(zoneMinutes) ? 0 : zoneMinutes))
+    }
+
+    const utcMs =
+        Date.UTC(
+            parseInt(parts[1], 10),
+            parseInt(parts[2], 10) - 1,
+            parseInt(parts[3], 10),
+            parseInt(parts[4], 10),
+            parseInt(parts[5], 10),
+            parseInt(parts[6], 10),
+        ) -
+        offsetMinutes * 60000
+
+    const utc = new Date(utcMs)
+    return (
+        utc.getUTCFullYear() +
+        '-' + pad2(utc.getUTCMonth() + 1) +
+        '-' + pad2(utc.getUTCDate()) +
+        ' ' + pad2(utc.getUTCHours()) +
+        ':' + pad2(utc.getUTCMinutes()) +
+        ':' + pad2(utc.getUTCSeconds())
+    )
+}
+
+/**
+ * Find a custom field's VALUE by its human LABEL.
+ *
+ * Custom fields carry per-instance ids — Story Points is customfield_10016 on one
+ * Jira and customfield_10024 on the next — so none of them can be hardcoded here.
+ * That is what `?expand=names` is for: it returns a fieldId -> label map alongside
+ * the fields, so we look up the label this Jira happens to use and read whatever
+ * id it points at. A Jira that has no such field is normal, not an error: the
+ * caller degrades to '' / null.
+ */
+function customField(fields: any, names: any, labels: string[]): any {
+    if (!fields || !names) return null
+    const ids = Object.keys(names)
+    for (let i = 0; i < labels.length; i++) {
+        const wanted = labels[i].toLowerCase()
+        for (let j = 0; j < ids.length; j++) {
+            if (String(names[ids[j]]).toLowerCase() !== wanted) continue
+            const value = fields[ids[j]]
+            if (value !== undefined && value !== null && value !== '') return value
+        }
+    }
+    return null
+}
+
+const EPIC_LABELS = ['Epic Link', 'Epic Name', 'Epic']
+
+/**
+ * The epic, as a NAME where Jira will give us one.
+ *
+ * An epic-typed parent carries its summary, which is the human name; the Epic
+ * Link custom field carries only the epic's KEY. Prefer the parent, fall back to
+ * the key, and never mistake a subtask's Story parent for an epic.
+ */
+function readEpic(fields: any, names: any): string {
+    const parent = fields ? fields.parent : null
+    if (parent && parent.fields && parent.fields.summary) {
+        const parentType = named(parent.fields.issuetype).toLowerCase()
+        if (parentType === 'epic') return String(parent.fields.summary)
+    }
+
+    const value = customField(fields, names, EPIC_LABELS)
+    if (!value) return ''
+    if (typeof value === 'string') return value
+    if (value.fields && value.fields.summary) return String(value.fields.summary)
+    if (value.name) return String(value.name)
+    if (value.value) return String(value.value)
+    if (value.key) return String(value.key)
+    return ''
+}
+
+/** GreenHopper's Sprint.toString(): '...Sprint@1a2b[id=5,state=ACTIVE,name=DBA Sprint 24,...]'. */
+const SPRINT_NAME = /[,[]name=([^,\]]*)/
+
+/**
+ * The current sprint's name.
+ *
+ * Jira DC is genuinely inconsistent here: the Sprint field comes back as an array
+ * of objects on a modern instance and as an array of GreenHopper toString() blobs
+ * on an older one — and sometimes as a bare value rather than an array. Take the
+ * LAST entry (the current sprint) and degrade to '' rather than rendering
+ * 'com.atlassian.greenhopper.service.sprint.Sprint@1a2b[...]' at an operator.
+ */
+function readSprint(fields: any, names: any): string {
+    const value = customField(fields, names, ['Sprint'])
+    if (!value) return ''
+
+    const entries = Array.isArray(value) ? value : [value]
+    for (let i = entries.length - 1; i >= 0; i--) {
+        const name = sprintName(entries[i])
+        if (name) return name
+    }
+    return ''
+}
+
+function sprintName(entry: any): string {
+    if (!entry) return ''
+    if (typeof entry === 'string') {
+        const parts = SPRINT_NAME.exec(entry)
+        if (parts) return String(parts[1]).trim()
+        // A plain name, from a Jira that hands back strings without the blob.
+        return entry.indexOf('=') < 0 ? entry.trim() : ''
+    }
+    if (entry.name) return String(entry.name)
+    return ''
+}
+
+const STORY_POINT_LABELS = ['Story Points', 'Story Point Estimate', 'Story point estimate']
+
+/** null, not 0, when the field is absent — the client renders the absence. */
+function readStoryPoints(fields: any, names: any): number | null {
+    const value = customField(fields, names, STORY_POINT_LABELS)
+    if (value === null || value === undefined || value === '') return null
+    const points = Number(value)
+    return isNaN(points) ? null : points
+}
+
+function readLabels(value: any): string[] {
+    const labels: string[] = []
+    if (!value || !Array.isArray(value)) return labels
+    for (let i = 0; i < value.length; i++) {
+        const label = text(value[i]).trim()
+        if (label) labels.push(label)
+    }
+    return labels
+}
+
+/**
+ * Comments, oldest first, capped at the most recent COMMENT_LIMIT.
+ *
+ * `body` is a plain string because this is REST v2. On v3 it would be an ADF
+ * document — an object tree — and this line would silently render '[object
+ * Object]' at an operator. That is the concrete reason the header insists on v2.
+ */
+function readComments(comment: any): JiraComment[] {
+    const comments: JiraComment[] = []
+    const raw = comment && Array.isArray(comment.comments) ? comment.comments : null
+    if (!raw) return comments
+
+    const start = raw.length > COMMENT_LIMIT ? raw.length - COMMENT_LIMIT : 0
+    for (let i = start; i < raw.length; i++) {
+        const entry = raw[i]
+        if (!entry) continue
+        comments.push({
+            id: text(entry.id),
+            author: personName(entry.author),
+            when: toSnDate(entry.created),
+            body: text(entry.body),
+        })
+    }
+    return comments
+}
+
+/** 'NET' out of 'NET-4451'. Only used when Jira somehow omits the project. */
+function keyPrefix(key: string): string {
+    const cut = key.indexOf('-')
+    return cut > 0 ? key.slice(0, cut) : key
+}
+
+/** A Jira search/issue row -> the shape a list row or badge needs. */
+function mapSummary(raw: any): JiraIssueSummary | null {
+    if (!raw || !raw.key) return null
+    const fields = raw.fields || {}
+    return {
+        key: String(raw.key),
+        summary: text(fields.summary),
+        type: named(fields.issuetype),
+        status: named(fields.status),
+        statusCategory: statusCategoryOf(fields.status),
+        priority: named(fields.priority),
+        assignee: personName(fields.assignee),
+    }
+}
+
+/**
+ * A Jira issue -> everything the detail surface renders.
+ *
+ * Null when the payload is not an issue at all; the caller turns that into an
+ * upstream error rather than an innocent-looking `issue: null`, which the console
+ * would (correctly) read as "Jira does not have this key".
+ */
+function mapDetail(raw: any): JiraIssueDetail | null {
+    const summary = mapSummary(raw)
+    if (!summary || !raw.fields) return null
+
+    const fields = raw.fields
+    const names = raw.names || null
+    const project = fields.project || null
+    const projectKey = project && project.key ? String(project.key) : keyPrefix(summary.key)
+
+    return {
+        key: summary.key,
+        summary: summary.summary,
+        type: summary.type,
+        status: summary.status,
+        statusCategory: summary.statusCategory,
+        priority: summary.priority,
+        assignee: summary.assignee,
+        projectKey: projectKey,
+        projectName:
+            project && project.name ? String(project.name) : PROJECTS[projectKey] || projectKey,
+        description: text(fields.description),
+        reporter: personName(fields.reporter),
+        epic: readEpic(fields, names),
+        sprint: readSprint(fields, names),
+        labels: readLabels(fields.labels),
+        storyPoints: readStoryPoints(fields, names),
+        created: toSnDate(fields.created),
+        updated: toSnDate(fields.updated),
+        resolution: named(fields.resolution),
+        comments: readComments(fields.comment),
+    }
+}
+
+/**
+ * The fixture lookup — the answer when no Jira is configured. See the file header
+ * for why the fixtures still exist and when they are (and are not) served.
+ */
+function findFixture(key: string): JiraIssueDetail | null {
     for (let i = 0; i < ISSUES.length; i++) {
         if (ISSUES[i].key === key) return ISSUES[i]
     }
@@ -815,37 +1246,133 @@ function readReferences(key: string): JiraReference[] {
 }
 
 /**
+ * The requested keys: de-duplicated, validated against KEY_PATTERN, capped.
+ *
+ * The validation is also what makes the JQL below safe to build by concatenation
+ * — a key that survives KEY_PATTERN contains no quote, paren or space, so there
+ * is nothing in it to break out of the `key in ("…")` list with.
+ */
+function uniqueKeys(raw: string): string[] {
+    const requested = raw.split(',')
+    const keys: string[] = []
+    const seen: { [key: string]: boolean } = {}
+
+    for (let i = 0; i < requested.length && keys.length < BATCH_LIMIT; i++) {
+        const key = requested[i].trim()
+        if (!key || seen[key] || !KEY_PATTERN.test(key)) continue
+        seen[key] = true
+        keys.push(key)
+    }
+    return keys
+}
+
+/** Fixture summaries, for the unconfigured case. */
+function fixtureSummaries(keys: string[]): JiraIssueSummary[] {
+    const issues: JiraIssueSummary[] = []
+    for (let i = 0; i < keys.length; i++) {
+        const issue = findFixture(keys[i])
+        if (issue) issues.push(toSummary(issue))
+    }
+    return issues
+}
+
+/**
+ * All the requested keys in ONE search, rather than one callout per key: the
+ * activity feed and the Jiras tab can put a dozen keys on screen at once, and N
+ * synchronous outbound calls inside a single scripted-REST transaction is how you
+ * turn a badge row into a timeout.
+ *
+ * validateQuery=warn is load-bearing. Under Jira's default (strict), a JQL `key
+ * in (...)` list containing a key from a project this Jira does not have is a 400
+ * for the WHOLE query — and keys typed into change_task.correlation_display by
+ * hand are exactly where that happens. 'warn' answers with the keys it does know
+ * and says nothing about the rest, which is the contract the client already has:
+ * a key absent from `issues` means "asked, and there is nothing".
+ */
+function searchSummaries(config: JiraConfig, keys: string[]): JiraIssueSummary[] {
+    const jql = 'key in ("' + keys.join('","') + '")'
+    const path =
+        JIRA_API +
+        '/search?jql=' + encodeURIComponent(jql) +
+        '&fields=' + encodeURIComponent(SUMMARY_FIELDS) +
+        '&maxResults=' + keys.length +
+        '&validateQuery=warn'
+
+    const result = jiraGet(config, path)
+    if (result.error || !result.data || !Array.isArray(result.data.issues)) {
+        // Summaries are decoration: a badge that cannot resolve still shows its
+        // key. Log it and hand back nothing rather than failing the request.
+        gs.warn(
+            '[weekend-console] Jira summary search for ' + keys.length +
+            ' key(s) failed: ' + (result.error || 'unexpected response shape') +
+            '. Badges will render unresolved.',
+        )
+        return []
+    }
+
+    const raw = result.data.issues
+    const issues: JiraIssueSummary[] = []
+    for (let i = 0; i < raw.length; i++) {
+        const summary = mapSummary(raw[i])
+        if (summary) issues.push(summary)
+    }
+    return issues
+}
+
+/**
  * GET /api/x_912401_weekend_c/jira/issues?keys=NET-4451,SEC-3319
+ * Headers: X-Jira-Url, X-Jira-Token (both optional; without them, fixtures).
  *
  * Batch summaries for lists and badges — the Jiras tab and the activity feed
  * both render many keys at once and neither needs a description or comments.
  * Keys with no issue behind them are simply absent from `issues`; the client
  * caches that as "asked, and there is nothing", so a miss costs one request.
+ *
+ * THIS ROUTE NEVER FAILS. Summaries are decoration — a row whose summary did not
+ * resolve still shows its key and still links through — so a dead or misconfigured
+ * Jira degrades the badges and nothing else. It answers 200 with an empty list and
+ * leaves the shouting to getIssue, where the payload actually is the page.
  */
 export function listIssues(request: any, response: any): void {
-    const requested = queryParam(request, 'keys').split(',')
-    const issues: JiraIssueSummary[] = []
-    const seen: { [key: string]: boolean } = {}
-
-    for (let i = 0; i < requested.length && issues.length < BATCH_LIMIT; i++) {
-        const key = requested[i].trim()
-        if (!key || seen[key] || !KEY_PATTERN.test(key)) continue
-        seen[key] = true
-        const issue = findIssue(key)
-        if (issue) issues.push(toSummary(issue))
+    const keys = uniqueKeys(queryParam(request, 'keys'))
+    if (keys.length === 0) {
+        response.setBody({ issues: [] })
+        return
     }
 
-    response.setBody({ issues: issues })
+    const config = readConfig(request)
+    if (!config) {
+        response.setBody({ issues: fixtureSummaries(keys) })
+        return
+    }
+
+    if (!ABSOLUTE_URL.test(config.baseUrl)) {
+        // Configured, but wrongly. Falling back to fixtures here would answer a
+        // broken config with plausible data, which is worse than answering nothing.
+        gs.warn('[weekend-console] X-Jira-Url is not an absolute http(s) URL; serving no summaries.')
+        response.setBody({ issues: [] })
+        return
+    }
+
+    response.setBody({ issues: searchSummaries(config, keys) })
 }
 
 /**
  * GET /api/x_912401_weekend_c/jira/issue?key=NET-4451
+ * Headers: X-Jira-Url, X-Jira-Token (both optional; without them, fixtures).
  *
  * One issue, plus the real change tasks that name it. `issue` and `references`
  * are siblings on purpose: they come from different systems. An unknown key is a
  * 200 with issue: null — not an error — and its references still resolve, so the
  * console can honestly say "no such issue in Jira, but these tasks point at it."
- * 400 is reserved for a caller who sent no key at all.
+ * 400 is reserved for a caller who sent no key, or an unusable X-Jira-Url.
+ *
+ * THE TWO KINDS OF "NO ISSUE" ARE NOT THE SAME AND MUST NOT LOOK THE SAME. Jira
+ * answering 404 means the key genuinely is not there — that is the issue: null
+ * contract above, and the console renders it. Jira answering 401/403/5xx, or not
+ * answering at all, means we DO NOT KNOW; that gets an error status, so the
+ * client's getIssue throws and JiraDetailView renders its error state. Dressing a
+ * failed callout up as "no such issue" would be a lie the operator cannot catch.
  */
 export function getIssue(request: any, response: any): void {
     const key = queryParam(request, 'key').trim()
@@ -856,16 +1383,56 @@ export function getIssue(request: any, response: any): void {
         return
     }
 
-    // A malformed key can't match a fixture and can't match correlation_display
+    // A malformed key can't match an issue and can't match correlation_display
     // in any meaningful way — answer "not found" rather than running the queries.
     if (!KEY_PATTERN.test(key)) {
         response.setBody({ key: key, issue: null, references: [] })
         return
     }
 
+    const config = readConfig(request)
+
+    if (!config) {
+        response.setBody({
+            key: key,
+            issue: findFixture(key),
+            references: readReferences(key),
+        })
+        return
+    }
+
+    if (!ABSOLUTE_URL.test(config.baseUrl)) {
+        response.setStatus(400)
+        response.setBody({
+            error: 'X-Jira-Url must be an absolute http(s) URL, e.g. https://jira.example.com',
+        })
+        return
+    }
+
+    const result = jiraGet(
+        config,
+        // fields=*all so the comment field and the custom fields come back; expand=names
+        // so we can find the custom fields by LABEL, since their ids differ per instance.
+        JIRA_API + '/issue/' + encodeURIComponent(key) + '?expand=names&fields=*all',
+    )
+
+    if (result.status === 404) {
+        response.setBody({ key: key, issue: null, references: readReferences(key) })
+        return
+    }
+
+    const issue = result.error ? null : mapDetail(result.data)
+    if (!issue) {
+        const reason = result.error || 'Jira answered with something that is not an issue'
+        gs.error('[weekend-console] Jira lookup for ' + key + ' failed: ' + reason)
+        response.setStatus(502)
+        response.setBody({ error: 'Jira lookup failed: ' + reason })
+        return
+    }
+
     response.setBody({
         key: key,
-        issue: findIssue(key),
+        issue: issue,
         references: readReferences(key),
     })
 }

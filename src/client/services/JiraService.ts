@@ -88,9 +88,31 @@ export interface JiraIssueResult {
  * and nothing else. The detail payload IS the page, so getIssue throws and the
  * view renders an error — silently showing an empty issue would be a lie.
  */
+/**
+ * Where to reach Jira, and with what. Configured in the console's Settings dialog.
+ *
+ * The console still never talks to Jira — it hands these to its own scope, which
+ * makes the callout. A browser cannot reach a corporate Jira behind the VPN, and
+ * even where it could the CORS preflight would fail, so routing through the
+ * instance is not a preference, it is the only thing that works.
+ *
+ * Empty config is a valid, supported state: the route falls back to its fixtures.
+ */
+export interface JiraConfig {
+  baseUrl: string
+  token: string
+}
+
 export class JiraService {
   /** key → summary, or null for "asked, and there is no such issue". Both are cache hits. */
   private summaries = new Map<string, JiraIssueSummary | null>()
+
+  /**
+   * The cache is per-instance and the caller rebuilds this service when the config
+   * changes, so a key resolved against the OLD Jira can never survive into the new
+   * one — which is exactly what you want the moment someone fixes a typo'd URL.
+   */
+  constructor(private readonly config: JiraConfig = { baseUrl: '', token: '' }) {}
 
   /**
    * Batch summaries for the keys on screen. Cached across renders and shared by
@@ -143,10 +165,31 @@ export class JiraService {
     return (body?.result?.issues ?? body?.issues ?? []) as JiraIssueSummary[]
   }
 
+  /**
+   * The Jira connection, forwarded to our own scope as HEADERS.
+   *
+   * Headers rather than query params, deliberately: a token in a query string is
+   * written into the ServiceNow transaction log, the front proxy's access log and
+   * the browser's history. A header is in none of those.
+   *
+   * Omitted entirely when unconfigured, so the route sees "no Jira" rather than a
+   * pair of empty strings it has to interpret.
+   */
+  private jiraHeaders(): Record<string, string> {
+    const baseUrl = this.config.baseUrl.trim()
+    const token = this.config.token.trim()
+    if (!baseUrl || !token) return {}
+    return { 'X-Jira-Url': baseUrl, 'X-Jira-Token': token }
+  }
+
   private async get(url: string): Promise<any> {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json', 'X-UserToken': window.g_ck },
+      headers: {
+        Accept: 'application/json',
+        'X-UserToken': window.g_ck,
+        ...this.jiraHeaders(),
+      },
     })
     if (!response.ok) throw new Error(`HTTP error ${response.status}`)
     // Scripted REST bodies come through raw from response.setBody(); platform

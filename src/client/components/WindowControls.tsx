@@ -35,6 +35,31 @@ export interface LlmConfig {
 export const DEFAULT_LLM_CONFIG: LlmConfig = { endpoint: '', token: '' }
 
 /**
+ * Jira connection settings.
+ *
+ * These look like the LLM pair above and behave completely differently, so the
+ * difference is worth stating: the LLM endpoint is called BY THE BROWSER, and the
+ * Jira instance is not. Jira is called by the ServiceNow instance, from the scoped
+ * REST route — so these two values are not used here at all. They are forwarded to
+ * that route as request HEADERS, and the callout is made server-side.
+ *
+ * That is not ceremony. A browser cannot reach a corporate Jira behind the VPN,
+ * and even where it could, the CORS preflight would fail. Sending them through the
+ * instance is the only thing that actually works — and it is also why they ride as
+ * headers rather than query params: a token in a query string is written into the
+ * ServiceNow transaction log, the front proxy's access log, and browser history.
+ *
+ * `token` is a Jira personal access token, sent as `Authorization: Bearer`.
+ * Empty config = the route falls back to its fixtures, and the demo still runs.
+ */
+export interface JiraConfig {
+  baseUrl: string
+  token: string
+}
+
+export const DEFAULT_JIRA_CONFIG: JiraConfig = { baseUrl: '', token: '' }
+
+/**
  * Zones offered when Intl.supportedValuesOf is unavailable. The browser zone is
  * prepended and deduped by the option builder, so it is omitted here.
  */
@@ -66,6 +91,8 @@ export function WindowControls({
   onConfigChange,
   llmConfig,
   onLlmConfigChange,
+  jiraConfig,
+  onJiraConfigChange,
 }: {
   weekOffset: number
   onWeekOffset: (offset: number) => void
@@ -73,6 +100,8 @@ export function WindowControls({
   onConfigChange: (config: WindowConfig) => void
   llmConfig: LlmConfig
   onLlmConfigChange: (config: LlmConfig) => void
+  jiraConfig: JiraConfig
+  onJiraConfigChange: (config: JiraConfig) => void
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -108,6 +137,8 @@ export function WindowControls({
         onConfigChange={onConfigChange}
         llmConfig={llmConfig}
         onLlmConfigChange={onLlmConfigChange}
+        jiraConfig={jiraConfig}
+        onJiraConfigChange={onJiraConfigChange}
       />
     </div>
   )
@@ -118,11 +149,15 @@ function SettingsDialog({
   onConfigChange,
   llmConfig,
   onLlmConfigChange,
+  jiraConfig,
+  onJiraConfigChange,
 }: {
   config: WindowConfig
   onConfigChange: (config: WindowConfig) => void
   llmConfig: LlmConfig
   onLlmConfigChange: (config: LlmConfig) => void
+  jiraConfig: JiraConfig
+  onJiraConfigChange: (config: JiraConfig) => void
 }) {
   const [open, setOpen] = useState(false)
   const [startTime, setStartTime] = useState(config.startTime)
@@ -130,6 +165,8 @@ function SettingsDialog({
   const [timeZone, setTimeZone] = useState(config.timeZone)
   const [endpoint, setEndpoint] = useState(llmConfig.endpoint)
   const [token, setToken] = useState(llmConfig.token)
+  const [jiraUrl, setJiraUrl] = useState(jiraConfig.baseUrl)
+  const [jiraToken, setJiraToken] = useState(jiraConfig.token)
 
   // The full zone list: the browser zone pinned first (and deduped), then the
   // current selection (so a persisted non-canonical zone still has a matching
@@ -157,6 +194,8 @@ function SettingsDialog({
       setTimeZone(config.timeZone)
       setEndpoint(llmConfig.endpoint)
       setToken(llmConfig.token)
+      setJiraUrl(jiraConfig.baseUrl)
+      setJiraToken(jiraConfig.token)
     }
     setOpen(next)
   }
@@ -168,6 +207,10 @@ function SettingsDialog({
       timeZone: timeZone || DEFAULT_WINDOW_CONFIG.timeZone,
     })
     onLlmConfigChange({ endpoint: endpoint.trim(), token })
+    // Trailing slash stripped here rather than on the server: the route builds
+    // '{base}/rest/api/2/...' by concatenation, and a saved 'https://jira/' would
+    // produce a double slash that some reverse proxies 404 on.
+    onJiraConfigChange({ baseUrl: jiraUrl.trim().replace(/\/+$/, ''), token: jiraToken })
     setOpen(false)
   }
 
@@ -257,6 +300,33 @@ function SettingsDialog({
               value={token}
               onChange={(e) => setToken(e.target.value)}
             />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-caption font-medium text-body-text">Jira URL</span>
+            <Input
+              type="text"
+              placeholder="https://jira.example.com"
+              value={jiraUrl}
+              onChange={(e) => setJiraUrl(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-caption font-medium text-body-text">
+              Jira personal access token
+            </span>
+            <Input
+              type="password"
+              autoComplete="off"
+              value={jiraToken}
+              onChange={(e) => setJiraToken(e.target.value)}
+            />
+            {/* Says where the token goes, because the answer is surprising: unlike
+                the LLM token above it, this one is never used by the browser. It is
+                handed to the instance, which makes the call. Leaving both blank is a
+                valid state — the route serves its fixtures and the demo still runs. */}
+            <span className="text-caption text-muted-foreground">
+              Sent to the instance, which calls Jira. Leave blank to use sample issues.
+            </span>
           </label>
         </div>
         <DialogFooter>
