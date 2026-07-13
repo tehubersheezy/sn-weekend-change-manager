@@ -502,24 +502,41 @@
       opacity: 0;
     }
   }
+  /*
+   * These animate SCALE ONLY — never the -50%/-50% centering, even though the
+   * dialog's centering is a translate and it is tempting to keep the pair
+   * together.
+   *
+   * Tailwind v4's `-translate-x-1/2` does NOT compile to `transform`; it emits
+   * the standalone `translate` property. `translate` and `transform` are separate
+   * properties that COMPOSE (translate, then rotate, then scale, then transform),
+   * so a keyframe that also carries translate(-50%, -50%) does not override the
+   * utility — it adds to it, and the panel lands 100% of its own size off-centre.
+   * With fill-mode `both` the final frame is held, so it stays there: a dialog
+   * permanently half off the left edge of the screen. That shipped, and looked
+   * exactly like a broken build.
+   *
+   * Scaling still reads as centred because `translate` is applied first and the
+   * transform-origin is the element's own centre.
+   */
   @keyframes dialog-in {
     from {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.97);
+      transform: scale(0.97);
     }
     to {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: scale(1);
     }
   }
   @keyframes dialog-out {
     from {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: scale(1);
     }
     to {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.97);
+      transform: scale(0.97);
     }
   }
   /*
