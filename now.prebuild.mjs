@@ -1,4 +1,6 @@
 import { servicenowFrontEndPlugins, rollup, glob } from '@servicenow/isomorphic-rollup'
+import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 
 /**
  * Prebuild script for building the client assets of the application before running the rest of the build.
@@ -16,6 +18,28 @@ export default async ({ rootDir, config, fs, path, logger, registerExplicitId })
         logger.warn(`No HTML files found in ${clientDir}, skipping UI build.`)
         return
     }
+
+    // Generate the stylesheet HERE, as a step of the build, rather than in a sibling
+    // npm script. Rollup treats tailwind.generated.css as an input to bundle, so a
+    // build that does not regenerate it first ships whatever a previous run left on
+    // disk — and the file is gitignored, so on a fresh clone that is nothing at all.
+    // That is how dev421992 came to serve current JS against a stylesheet built before
+    // the AI-report work: the classes the new bundle asked for (max-w-3xl,
+    // animate-thinking-sweep) simply had no rules, and a dialog with no max-width goes
+    // full-bleed. Running Tailwind from inside the build makes every entry point --
+    // `now-sdk build`, `npm run build`, CI, another machine -- bundle CSS generated
+    // from the same source tree it is bundling. Failing loudly beats shipping skew.
+    const tailwindBin = path.join(rootDir, 'node_modules', '.bin', 'tailwindcss')
+    if (!existsSync(tailwindBin)) {
+        throw new Error(`Tailwind CLI not found at ${tailwindBin} — run \`npm install\` before building.`)
+    }
+    const themeCss = path.join(clientDir, 'styles', 'theme.css')
+    const generatedCss = path.join(clientDir, 'styles', 'tailwind.generated.css')
+    logger.info('Generating stylesheet from theme.css ...')
+    execFileSync(tailwindBin, ['-i', themeCss, '-o', generatedCss, '--minify'], {
+        cwd: rootDir,
+        stdio: 'inherit',
+    })
 
     // This is the destination for the build output
     const staticContentDir = path.join(rootDir, config.staticContentDir)
