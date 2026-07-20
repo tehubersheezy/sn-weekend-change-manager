@@ -8,6 +8,7 @@ import { useTimeZone } from '../context/TimeZone'
 import { asStateField } from '../utils/stateLabels'
 import { Button } from './ui/button'
 import { Skeleton } from './ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { StateBadge, TaskStateBadge } from './StateBadge'
 import { JiraPriorityFact, JiraStatusBadge, JiraTypeFact } from './JiraBadges'
 import type { DetailTab } from './ChangeDetailView'
@@ -23,13 +24,20 @@ import { FOCUS_RING, cn } from '../lib/utils'
  * dropped the coral focus ring below its 3:1 floor. It reads because it never
  * appears alone: the console is a 50/50 split and cream is always beside it.
  *
- * The one thing NOT painted blue is deliberate, and it is the most important
- * block on the page. "Referenced by" — the weekend change tasks that name this
- * issue — is the only SERVICENOW data here, and it renders in the native cream
- * chrome, inset into the blue. Both systems are visible at once, which is exactly
- * what this record is: a Jira issue with ServiceNow work hanging off it. It is
- * also the one question the real Jira page cannot answer, which is the reason
- * this page exists at all.
+ * The header and the issue's own description sit at the top, always visible;
+ * everything else lives under three tabs — Comments (the default), Details, and
+ * References. Comments leads because on a live weekend the thread is what a change
+ * actually turns on: the argument that flags a blocking dependency is a comment,
+ * not a field.
+ *
+ * The one block NOT painted blue is deliberate, and it is the most important thing
+ * on the page: References — the weekend change tasks that name this issue — is the
+ * only SERVICENOW data here, and it renders in the native cream chrome, inset into
+ * the blue. Both systems are visible at once, which is exactly what this record is:
+ * a Jira issue with ServiceNow work hanging off it. It is also the one question the
+ * real Jira page cannot answer, which is the reason this page exists at all. It now
+ * sits behind a tab rather than above the fold, but it is one click away and it is
+ * why the surface is worth opening.
  *
  * The issue fields are mock; the references are live. See src/server/jira.ts.
  *
@@ -40,6 +48,28 @@ import { FOCUS_RING, cn } from '../lib/utils'
  * on blue paper.
  */
 const JIRA_FOCUS = cn(FOCUS_RING, 'focus-visible:ring-offset-jira-canvas')
+
+/**
+ * The tab trigger, re-toned for the blue pane. The shared TabsTrigger bakes in the
+ * NATIVE cream tokens — surface-card for the active fill, a warm peach wash on
+ * hover, a cream focus offset. On this surface all three are wrong: a warm hover on
+ * blue breaks the "Jira clickables hover in-family, never toward warm/coral" rule.
+ *
+ * Each is overridden with its Jira sibling (tailwind-merge keeps the last of a
+ * conflicting pair). Active and hover share --jira-card because there is no step
+ * between --jira-canvas and --jira-card to spend on hover, and --jira-hairline-hover
+ * as a full fill would be heavier than the SELECTED tab and shout the blue. They
+ * stay distinct by TEXT instead — active keeps the base's text-ink, a hovered
+ * inactive tab keeps text-muted-foreground — the same reads-by-weight-not-lightness
+ * the tab labels already lean on.
+ */
+const JIRA_TAB = cn(
+  'data-[state=active]:bg-jira-card data-[state=inactive]:hover:bg-jira-card',
+  'focus-visible:ring-offset-jira-canvas',
+)
+
+/** This pane's tabs. Comments leads; the surface opens on it. */
+type JiraDetailTab = 'comments' | 'details' | 'references'
 
 export function JiraDetailView({
   service,
@@ -59,11 +89,16 @@ export function JiraDetailView({
   onBack: () => void
   onOpenChange: (sysId: string, tab?: DetailTab) => void
 }) {
-  const zone = useTimeZone()
   const [issue, setIssue] = useState<JiraIssueDetail | null>(null)
   const [references, setReferences] = useState<JiraReference[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Uncontrolled would leak the last tab across issues: this pane reloads through
+  // an effect rather than remounting per key, so nothing resets it on its own.
+  // Reset to Comments whenever the key changes, mirroring ChangeDetailView.
+  const [tab, setTab] = useState<JiraDetailTab>('comments')
+  useEffect(() => setTab('comments'), [issueKey])
 
   // silent=true refetches in place (live AMB updates) without the skeleton flash.
   const load = useCallback(
@@ -155,9 +190,6 @@ export function JiraDetailView({
             </div>
           </header>
 
-          {/* The ServiceNow anchor — see the note at the top of this file. */}
-          <ReferencedBy references={references} onOpenChange={onOpenChange} />
-
           {issue.description && (
             <section className="flex flex-col gap-2">
               <SectionLabel>Description</SectionLabel>
@@ -171,67 +203,40 @@ export function JiraDetailView({
             </section>
           )}
 
-          <section className="flex flex-col gap-2">
-            <SectionLabel>Details</SectionLabel>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg bg-jira-card p-5">
-              <Field label="Assignee" value={issue.assignee} />
-              <Field label="Reporter" value={issue.reporter} />
-              <Field label="Epic" value={issue.epic} />
-              <Field label="Sprint" value={issue.sprint} />
-              <Field
-                label="Story points"
-                value={issue.storyPoints === null ? '' : String(issue.storyPoints)}
-              />
-              <Field label="Resolution" value={issue.resolution} />
-              <Field label="Created" value={formatDateTime(parseSnDate(issue.created), zone)} />
-              <Field label="Updated" value={formatDateTime(parseSnDate(issue.updated), zone)} />
-              {issue.labels.length > 0 && (
-                <div className="col-span-2">
-                  <dt className="text-caption text-muted-foreground">Labels</dt>
-                  <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                    {/* Outline only. These sit ON --jira-card, so a --jira-card
-                        fill would vanish into its own background. */}
-                    {issue.labels.map((label) => (
-                      <span
-                        key={label}
-                        className="inline-flex items-center rounded-full border border-jira-hairline px-3 py-1 text-caption font-medium text-jira-ink"
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          </section>
+          {/* Beneath the description: everything else, one tab at a time. Comments
+              is the default — see the file header for why the thread leads. */}
+          <Tabs value={tab} onValueChange={(next) => setTab(next as JiraDetailTab)}>
+            {/* The count leads the label and stays recessive against it — by
+                WEIGHT, not lightness (font-normal against the trigger's 500), the
+                same call ChangeDetailView's tabs make. Details carries no count:
+                it is one panel, not a collection. */}
+            <TabsList className="flex-wrap">
+              <TabsTrigger value="comments" className={cn('gap-1.5', JIRA_TAB)}>
+                <span className="font-normal text-muted-foreground">{issue.comments.length}</span>
+                {issue.comments.length === 1 ? 'Comment' : 'Comments'}
+              </TabsTrigger>
+              <TabsTrigger value="details" className={JIRA_TAB}>
+                Details
+              </TabsTrigger>
+              <TabsTrigger value="references" className={cn('gap-1.5', JIRA_TAB)}>
+                <span className="font-normal text-muted-foreground">{references.length}</span>
+                {references.length === 1 ? 'Reference' : 'References'}
+              </TabsTrigger>
+            </TabsList>
 
-          <section className="flex flex-col gap-2">
-            <SectionLabel>
-              {issue.comments.length === 1 ? '1 comment' : `${issue.comments.length} comments`}
-            </SectionLabel>
-            {issue.comments.length === 0 ? (
-              <p className="rounded-lg bg-jira-card p-5 text-body-sm text-muted-foreground">
-                No comments on this issue.
-              </p>
-            ) : (
-              <ol className="flex flex-col gap-3">
-                {issue.comments.map((comment) => (
-                  <li key={comment.id} className="rounded-lg bg-jira-card p-5">
-                    <div className="flex flex-wrap items-baseline gap-x-2 text-caption text-muted-foreground">
-                      <span className="font-medium text-ink">{comment.author}</span>
-                      <span>
-                        {formatDay(parseSnDate(comment.when), zone)} at{' '}
-                        {formatTime(parseSnDate(comment.when), zone)}
-                      </span>
-                    </div>
-                    <p className="mt-2 whitespace-pre-wrap text-body-sm text-body-text">
-                      {comment.body}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+            <TabsContent value="comments">
+              <CommentThread comments={issue.comments} />
+            </TabsContent>
+
+            <TabsContent value="details">
+              <DetailsGrid issue={issue} />
+            </TabsContent>
+
+            <TabsContent value="references">
+              {/* The ServiceNow anchor — see the note at the top of this file. */}
+              <ReferenceList references={references} onOpenChange={onOpenChange} />
+            </TabsContent>
+          </Tabs>
         </div>
       )}
     </div>
@@ -241,6 +246,43 @@ export function JiraDetailView({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="text-caption-upper font-medium uppercase text-muted-foreground">{children}</h3>
+  )
+}
+
+/** The Details tab: the issue's fields, in the quiet blue panel. */
+function DetailsGrid({ issue }: { issue: JiraIssueDetail }) {
+  const zone = useTimeZone()
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg bg-jira-card p-5">
+      <Field label="Assignee" value={issue.assignee} />
+      <Field label="Reporter" value={issue.reporter} />
+      <Field label="Epic" value={issue.epic} />
+      <Field label="Sprint" value={issue.sprint} />
+      <Field
+        label="Story points"
+        value={issue.storyPoints === null ? '' : String(issue.storyPoints)}
+      />
+      <Field label="Resolution" value={issue.resolution} />
+      <Field label="Created" value={formatDateTime(parseSnDate(issue.created), zone)} />
+      <Field label="Updated" value={formatDateTime(parseSnDate(issue.updated), zone)} />
+      {issue.labels.length > 0 && (
+        <div className="col-span-2">
+          <dt className="text-caption text-muted-foreground">Labels</dt>
+          <dd className="mt-1.5 flex flex-wrap gap-1.5">
+            {/* Outline only. These sit ON --jira-card, so a --jira-card
+                fill would vanish into its own background. */}
+            {issue.labels.map((label) => (
+              <span
+                key={label}
+                className="inline-flex items-center rounded-full border border-jira-hairline px-3 py-1 text-caption font-medium text-jira-ink"
+              >
+                {label}
+              </span>
+            ))}
+          </dd>
+        </div>
+      )}
+    </dl>
   )
 }
 
@@ -255,6 +297,34 @@ function Field({ label, value }: { label: string; value: string }) {
   )
 }
 
+/** The Comments tab: the issue's thread, oldest first. */
+function CommentThread({ comments }: { comments: JiraIssueDetail['comments'] }) {
+  const zone = useTimeZone()
+  if (comments.length === 0) {
+    return (
+      <p className="rounded-lg bg-jira-card p-5 text-body-sm text-muted-foreground">
+        No comments on this issue.
+      </p>
+    )
+  }
+  return (
+    <ol className="flex flex-col gap-3">
+      {comments.map((comment) => (
+        <li key={comment.id} className="rounded-lg bg-jira-card p-5">
+          <div className="flex flex-wrap items-baseline gap-x-2 text-caption text-muted-foreground">
+            <span className="font-medium text-ink">{comment.author}</span>
+            <span>
+              {formatDay(parseSnDate(comment.when), zone)} at{' '}
+              {formatTime(parseSnDate(comment.when), zone)}
+            </span>
+          </div>
+          <p className="mt-2 whitespace-pre-wrap text-body-sm text-body-text">{comment.body}</p>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 /**
  * The weekend change tasks that name this issue — the only ServiceNow data on
  * this page, and the only question the real Jira page cannot answer.
@@ -262,6 +332,85 @@ function Field({ label, value }: { label: string; value: string }) {
  * It paints in the NATIVE cream chrome, inset into the blue surface. That is the
  * whole idea: the boundary between the two systems is the CONTENT here, not a
  * theme. Someone reading this block is looking at both systems at once.
+ */
+function ReferenceList({
+  references,
+  onOpenChange,
+}: {
+  references: JiraReference[]
+  onOpenChange: (sysId: string, tab?: DetailTab) => void
+}) {
+  if (references.length === 0) {
+    return (
+      <p className="rounded-lg bg-jira-card p-5 text-body-sm text-muted-foreground">
+        No weekend change task references this issue.
+      </p>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {references.map((ref) => {
+        // A task whose parent change the caller can't read still lists — it
+        // just has nowhere to navigate to. Don't dangle a dead button.
+        const openable = Boolean(ref.changeSysId)
+        const body = (
+          <>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-caption font-medium text-ink">{ref.taskNumber}</span>
+              <TaskStateBadge state={asStateField('change_task', ref.taskState)} size="sm" />
+            </div>
+            <div className="mt-1 text-body-sm text-body-text">
+              {ref.taskShortDescription || 'Untitled task'}
+            </div>
+            {ref.changeNumber && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-hairline-soft pt-3 text-caption text-muted-foreground">
+                <span className="font-medium text-ink">{ref.changeNumber}</span>
+                <StateBadge state={asStateField('change_request', ref.changeState)} size="sm" />
+                <span className="min-w-0 truncate">{ref.changeShortDescription}</span>
+              </div>
+            )}
+          </>
+        )
+
+        // Cream card on the blue page — the native surface, quoted verbatim.
+        // NB the classes are `border-border`/`bg-background`, not DESIGN.md's
+        // token names (`hairline`/`canvas`): those emit no CSS at all, which
+        // rendered this card transparent and borderless on the blue — the one
+        // idea the page is built around, invisible, with nothing to catch it.
+        const surface = 'rounded-lg border border-border bg-background p-5 text-left'
+
+        return openable ? (
+          <button
+            key={ref.taskSysId}
+            type="button"
+            title={`Open ${ref.changeNumber} on its Change tasks tab`}
+            onClick={() => onOpenChange(ref.changeSysId, 'tasks')}
+            // The cream card is native chrome, so it takes the NATIVE warm
+            // tier even on the blue pane — hover warmth is the console's
+            // cursor, like the coral focus ring, and it doesn't re-tint per
+            // surface. Press deepens to surface-card.
+            className={cn(
+              surface,
+              'transition-colors hover:border-hover-hairline hover:bg-hover-surface active:bg-surface-card',
+              JIRA_FOCUS,
+            )}
+          >
+            {body}
+          </button>
+        ) : (
+          <div key={ref.taskSysId} className={surface}>
+            {body}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * "Referenced by" as a labelled section — the standalone form, for the NotFound
+ * case where there is no issue and so no tabs to file it under. The tab uses the
+ * bare ReferenceList; here the label carries the context the tab would have.
  */
 function ReferencedBy({
   references,
@@ -273,68 +422,7 @@ function ReferencedBy({
   return (
     <section className="flex flex-col gap-2">
       <SectionLabel>Referenced by</SectionLabel>
-      {references.length === 0 ? (
-        <p className="rounded-lg bg-jira-card p-5 text-body-sm text-muted-foreground">
-          No weekend change task references this issue.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {references.map((ref) => {
-            // A task whose parent change the caller can't read still lists — it
-            // just has nowhere to navigate to. Don't dangle a dead button.
-            const openable = Boolean(ref.changeSysId)
-            const body = (
-              <>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-caption font-medium text-ink">{ref.taskNumber}</span>
-                  <TaskStateBadge state={asStateField('change_task', ref.taskState)} size="sm" />
-                </div>
-                <div className="mt-1 text-body-sm text-body-text">
-                  {ref.taskShortDescription || 'Untitled task'}
-                </div>
-                {ref.changeNumber && (
-                  <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-hairline-soft pt-3 text-caption text-muted-foreground">
-                    <span className="font-medium text-ink">{ref.changeNumber}</span>
-                    <StateBadge state={asStateField('change_request', ref.changeState)} size="sm" />
-                    <span className="min-w-0 truncate">{ref.changeShortDescription}</span>
-                  </div>
-                )}
-              </>
-            )
-
-            // Cream card on the blue page — the native surface, quoted verbatim.
-            // NB the classes are `border-border`/`bg-background`, not DESIGN.md's
-            // token names (`hairline`/`canvas`): those emit no CSS at all, which
-            // rendered this card transparent and borderless on the blue — the one
-            // idea the page is built around, invisible, with nothing to catch it.
-            const surface = 'rounded-lg border border-border bg-background p-5 text-left'
-
-            return openable ? (
-              <button
-                key={ref.taskSysId}
-                type="button"
-                title={`Open ${ref.changeNumber} on its Change tasks tab`}
-                onClick={() => onOpenChange(ref.changeSysId, 'tasks')}
-                // The cream card is native chrome, so it takes the NATIVE warm
-                // tier even on the blue pane — hover warmth is the console's
-                // cursor, like the coral focus ring, and it doesn't re-tint per
-                // surface. Press deepens to surface-card.
-                className={cn(
-                  surface,
-                  'transition-colors hover:border-hover-hairline hover:bg-hover-surface active:bg-surface-card',
-                  JIRA_FOCUS,
-                )}
-              >
-                {body}
-              </button>
-            ) : (
-              <div key={ref.taskSysId} className={surface}>
-                {body}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <ReferenceList references={references} onOpenChange={onOpenChange} />
     </section>
   )
 }
@@ -343,6 +431,9 @@ function ReferencedBy({
  * A key with no issue behind it. Not an error — the key is simply not one this
  * Jira knows. The references still resolve, so the page can say something true
  * and useful rather than just failing.
+ *
+ * No tabs here: with no issue there are no comments and no details, so the
+ * references stand alone under their own label.
  */
 function NotFound({
   issueKey,
