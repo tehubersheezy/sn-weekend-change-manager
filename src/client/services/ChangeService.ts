@@ -28,6 +28,9 @@ const TASK_FIELDS = [
   'number',
   'short_description',
   'state',
+  // Planning / Implementation / Testing / Review — a choice code, cheap enough to
+  // carry on every task query (unlike description, which the window read skips).
+  'change_task_type',
   'assigned_to',
   'planned_start_date',
   'planned_end_date',

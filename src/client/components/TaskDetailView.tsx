@@ -7,6 +7,7 @@ import { useRecordWatch } from '../hooks/useAmb'
 import { display, value } from '../utils/fields'
 import { formatDateTime, parseSnDate, zoneAbbreviation } from '../utils/datetime'
 import { useTimeZone } from '../context/TimeZone'
+import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
 import { Skeleton } from './ui/skeleton'
@@ -128,6 +129,13 @@ export function TaskDetailView({
             </h2>
             <div className="flex flex-wrap items-center gap-2">
               <TaskStateBadge state={task.state} />
+              {/* The task's type (Planning / Implementation / Testing / Review) — a
+                  neutral cream pill, the same register ChangeDetailView gives the
+                  change's own type. Dropped when empty (10 of the window's tasks
+                  carry none) rather than rendering a blank chip. */}
+              {display(task.change_task_type) && (
+                <Badge variant="pill">{display(task.change_task_type)}</Badge>
+              )}
               {jiraKey && <JiraLink issueKey={jiraKey} onOpen={onOpenJira} />}
             </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-caption text-muted-foreground">

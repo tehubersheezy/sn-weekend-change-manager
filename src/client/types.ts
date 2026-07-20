@@ -51,6 +51,8 @@ export interface TaskRecord {
   number: SnField
   short_description: SnField
   state: SnField
+  /** change_task_type — Planning / Implementation / Testing / Review; often empty. */
+  change_task_type: SnField
   assigned_to: SnField
   planned_start_date: SnField
   planned_end_date: SnField
