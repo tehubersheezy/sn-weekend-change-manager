@@ -49,7 +49,7 @@ import { PlanList } from './components/PlanList'
 import { ExecuteList } from './components/ExecuteList'
 import { ReviewList } from './components/ReviewList'
 import { TimelineView } from './components/TimelineView'
-import { ChangeGridView } from './components/ChangeGridView'
+import { GridView } from './components/GridView'
 import { type DetailTab } from './components/ChangeDetailView'
 import { RecordPane, EMPTY_NAV, type DetailNav } from './components/RecordPane'
 import { ActivityFeed } from './components/ActivityFeed'
@@ -79,6 +79,16 @@ const AI_ACTION_LABEL: Record<ScreenKey, string> = {
  * half-width spreadsheet is neither.
  */
 type ViewKey = 'list' | 'timeline' | 'grid'
+
+/**
+ * Each screen's home view. Execute opens on the grid — mid-window the job is
+ * reading the whole register at once, not walking one change at a time — while
+ * Plan and Review keep the split list beside the detail pane. Switching screens
+ * lands on the destination's home view (same doctrine as the state filter
+ * reset); the toggle still moves anywhere from there.
+ */
+const defaultView = (screen: ScreenKey): ViewKey =>
+  screen === 'execute' ? 'grid' : 'list'
 
 function loadWindowConfig(): WindowConfig {
   try {
@@ -226,7 +236,7 @@ export default function App() {
   // that change is already the one on screen (no sysId change to react to).
   const [detailTab, setDetailTab] = useState<DetailTab>('details')
   const [filter, setFilter] = useState('all')
-  const [view, setView] = useState<ViewKey>('list')
+  const [view, setView] = useState<ViewKey>(() => defaultView(screen))
   const [groupFilter, setGroupFilter] = useState('all')
   const [assigneeFilter, setAssigneeFilter] = useState('all')
 
@@ -270,9 +280,11 @@ export default function App() {
   const [aiOpen, setAiOpen] = useState(false)
   const llmService = useMemo(() => new LlmService(llmConfig), [llmConfig])
 
-  // The two reads the console doesn't otherwise do window-wide. Both feed findings
-  // that are invisible per-change: CI collisions, and what a change's Jira actually
-  // says — its status, its description, and what people wrote on it.
+  // The two reads the console doesn't otherwise do per-change. Both feed findings
+  // that are invisible from inside one change: CI collisions, and what a change's
+  // Jira actually says — its status, its description, and what people wrote on it.
+  // The CI read has two consumers: the AI report, and the grid's Affected CIs tab
+  // (which folds the same rows per-CI and sorts the collisions to the top).
   //
   // The Jira read is gated on `aiOpen` because it is the expensive one and nothing
   // on screen consumes it: no list surface renders a description or a comment
@@ -369,6 +381,7 @@ export default function App() {
   const selectScreen = useCallback(
     (next: ScreenKey) => {
       setFilter('all') // state tabs are phase-scoped; reset on screen switch
+      setView(defaultView(next)) // each screen lands on its home view
       pushUrl(next, { id: selectedId, jira: jiraKey, person: personId, task: taskId }, titleFor())
       setNav((prev) => ({ ...prev, screen: next }))
     },
@@ -569,14 +582,44 @@ export default function App() {
   const effGroup = groupOptions.some((o) => o.value === groupFilter) ? groupFilter : 'all'
   const effAssignee = assigneeOptions.some((o) => o.value === assigneeFilter) ? assigneeFilter : 'all'
 
-  const visible = phaseChanges.filter(
+  // Two scopes on purpose: group/assignee filter the phase population for every
+  // view, while the STATE filter only narrows further where states are on
+  // screen — the list/timeline (whose rows are changes), and the grid's Change
+  // requests tab (which applies it itself; its other tabs project record types
+  // the state tabs don't describe).
+  const scoped = phaseChanges.filter(
     (c) =>
-      (effectiveFilter === 'all' || value(c.state) === effectiveFilter) &&
       (effGroup === 'all' || value(c.assignment_group) === effGroup) &&
       (effAssignee === 'all' || value(c.assigned_to) === effAssignee),
   )
+  const visible =
+    effectiveFilter === 'all'
+      ? scoped
+      : scoped.filter((c) => value(c.state) === effectiveFilter)
 
   const listProps = { changes: visible, tasksByChange, selectedId, onOpen: selectChange }
+
+  // The right-hand filter cluster. One element, two homes: the app's own
+  // toolbar row in list/timeline, or handed to GridView to render at the right
+  // end of ITS top row (whose left end is the record-type tabs) — only one
+  // renders at a time.
+  const filterControls = (
+    <div className="ml-auto flex flex-wrap items-center gap-2">
+      <RefFilter
+        allLabel="All groups"
+        options={groupOptions}
+        value={effGroup}
+        onChange={setGroupFilter}
+      />
+      <RefFilter
+        allLabel="Anyone"
+        options={assigneeOptions}
+        value={effAssignee}
+        onChange={setAssigneeFilter}
+      />
+      <ViewToggle view={view} onChange={setView} />
+    </div>
+  )
 
   return (
     <TimeZoneProvider zone={windowConfig.timeZone}>
@@ -637,36 +680,27 @@ export default function App() {
               : 'overflow-y-auto border-r border-border p-6',
           )}
         >
-          {/* One toolbar row: everything that scopes this list lives here. */}
-          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-            {!loading && !error && stateTabs.length > 0 && (
-              <Tabs value={effectiveFilter} onValueChange={setFilter}>
-                <TabsList className="flex-wrap">
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  {stateTabs.map((t) => (
-                    <TabsTrigger key={t.value} value={t.value}>
-                      {t.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            )}
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <RefFilter
-                allLabel="All groups"
-                options={groupOptions}
-                value={effGroup}
-                onChange={setGroupFilter}
-              />
-              <RefFilter
-                allLabel="Anyone"
-                options={assigneeOptions}
-                value={effAssignee}
-                onChange={setAssigneeFilter}
-              />
-              <ViewToggle view={view} onChange={setView} />
+          {/* One toolbar row: everything that scopes this list lives here. In
+              grid view the row belongs to GridView (record-type tabs at left,
+              the same filter cluster at right); until the grid has data to tab
+              over, the cluster renders here so the view toggle never vanishes. */}
+          {(view !== 'grid' || loading || Boolean(error)) && (
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+              {view !== 'grid' && !loading && !error && stateTabs.length > 0 && (
+                <Tabs value={effectiveFilter} onValueChange={setFilter}>
+                  <TabsList className="flex-wrap">
+                    <TabsTrigger value="all">All</TabsTrigger>
+                    {stateTabs.map((t) => (
+                      <TabsTrigger key={t.value} value={t.value}>
+                        {t.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              )}
+              {filterControls}
             </div>
-          </div>
+          )}
           {loading ? (
             <LoadingSkeletons />
           ) : error ? (
@@ -677,9 +711,15 @@ export default function App() {
               <p className="max-w-md text-body-sm text-error-ink">{error}</p>
             </CenteredState>
           ) : view === 'grid' ? (
-            <ChangeGridView
-              changes={visible}
+            <GridView
+              changes={scoped}
               tasksByChange={tasksByChange}
+              cis={cis}
+              jiraService={jiraService}
+              stateTabs={stateTabs}
+              stateFilter={effectiveFilter}
+              onStateFilter={setFilter}
+              controls={filterControls}
               onOpenChange={popoutOpenChange}
               onOpenJira={popoutOpenJira}
               onOpenPerson={popoutOpenPerson}

@@ -119,9 +119,6 @@ export class JiraService {
   /** key → summary, or null for "asked, and there is no such issue". Both are cache hits. */
   private summaries = new Map<string, JiraIssueSummary | null>()
 
-  /** The same, for the report's richer shape. Separate on purpose — see listNarratives. */
-  private narratives = new Map<string, JiraIssueNarrative | null>()
-
   /**
    * The cache is per-instance and the caller rebuilds this service when the config
    * changes, so a key resolved against the OLD Jira can never survive into the new
@@ -162,35 +159,31 @@ export class JiraService {
    * The same batch call, asking for each issue's description and comment thread.
    * For the AI report only — nothing on screen renders these.
    *
-   * It keeps its OWN cache rather than sharing `summaries`, and that separation is
-   * load-bearing: a key already resolved for a badge is in the summary cache
-   * WITHOUT its description, and a shared cache would hand that back as a hit. The
-   * report would then read an issue with an empty description and no comments and
-   * conclude, with total confidence, that nobody wrote anything on it.
+   * DELIBERATELY UNCACHED, unlike listSummaries. A summary backs a badge, which can
+   * afford to be a minute old; a narrative is EVIDENCE, and the report asserts things
+   * about it in a document someone pastes into a change record. Caching these by key
+   * meant the second report of a session made no network call at all and read the
+   * weekend's Jira as it looked when the dialog was first opened — a status report
+   * for a window that has moved on, which is the one thing this console exists to
+   * prevent. One batched fetch per report is the correct price of that.
    *
    * Degrades like listSummaries: a failed chunk settles as "asked, and there is
    * nothing", so a dead Jira costs the report its Jira half and never blocks it.
    */
   async listNarratives(keys: string[]): Promise<Map<string, JiraIssueNarrative>> {
     const wanted = [...new Set(keys.map((k) => k.trim()).filter(Boolean))]
-    const unresolved = wanted.filter((k) => !this.narratives.has(k))
+    const found = new Map<string, JiraIssueNarrative>()
 
-    for (const chunk of chunkIds(unresolved)) {
+    for (const chunk of chunkIds(wanted)) {
       try {
         for (const issue of await this.fetchNarrativeChunk(chunk)) {
-          this.narratives.set(issue.key, issue)
+          found.set(issue.key, issue)
         }
       } catch {
-        /* fall through — the loop below settles the whole chunk as unknown */
+        /* a dead chunk is simply absent from the map — the report says so and goes on */
       }
-      for (const key of chunk) if (!this.narratives.has(key)) this.narratives.set(key, null)
     }
 
-    const found = new Map<string, JiraIssueNarrative>()
-    for (const key of wanted) {
-      const issue = this.narratives.get(key)
-      if (issue) found.set(key, issue)
-    }
     return found
   }
 

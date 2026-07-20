@@ -7,6 +7,7 @@
     "#now:*": "./@types/servicenow/fluent/*/index.js"
   },
   "scripts": {
+    "postinstall": "patch-package",
     "css": "tailwindcss -i ./src/client/styles/theme.css -o ./src/client/styles/tailwind.generated.css --minify",
     "css:watch": "tailwindcss -i ./src/client/styles/theme.css -o ./src/client/styles/tailwind.generated.css --watch",
     "build": "now-sdk build",
@@ -22,6 +23,7 @@
     "@tailwindcss/cli": "4.3.2",
     "@types/react": "19.x",
     "@types/react-dom": "19.x",
+    "patch-package": "8.0.1",
     "tailwindcss": "4.3.2",
     "typescript": "5.5.4"
   },
